@@ -1,36 +1,40 @@
 import streamlit as st
 import pandas as pd
+import re
 
-st.title("SA Utilization Dashboard")
+st.title("Team Utilization Dashboard")
 
-file = st.file_uploader("Upload Worklog Excel", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload file", type=["txt", "csv"])
 
-if file:
-    df = pd.read_excel(file)
+def parse_time_to_hours(time_str):
+    pattern = r'(\d+)w|(\d+)d|(\d+)h|(\d+)m'
+    matches = re.findall(pattern, time_str)
 
-    # identify date columns (ตัวเลข 1-31)
-    date_cols = [col for col in df.columns if str(col).isdigit()]
+    total_hours = 0
+    for w, d, h, m in matches:
+        if w:
+            total_hours += int(w) * 40
+        if d:
+            total_hours += int(d) * 8
+        if h:
+            total_hours += int(h)
+        if m:
+            total_hours += int(m) / 60
 
-    # รวมชั่วโมงต่อ row
-    df["total_hours"] = df[date_cols].sum(axis=1)
+    return total_hours
 
-    # รวมต่อ user
-    user_summary = df.groupby("User")["total_hours"].sum().reset_index()
+if uploaded_file:
+    df = pd.read_csv(uploaded_file, sep="\t")
+    df = df[df["Project"] != "Total"]
+    df["Hours"] = df["Total"].apply(parse_time_to_hours)
 
-    # 🔥 คำนวณ working days จริง
-    working_days = len(date_cols)
-    capacity = working_days * 8
+    grouped = df.groupby("User").agg({
+        "Hours": "sum"
+    }).reset_index()
 
-    user_summary["utilization"] = user_summary["total_hours"] / capacity
+    grouped["Available"] = 160 - grouped["Hours"]
+    grouped["Utilization"] = (grouped["Hours"] / 160 * 100).round(0)
 
-    # KPI
-    st.metric("Working Days", working_days)
-    st.metric("Capacity / User (hrs)", capacity)
-    st.metric("Avg Utilization", f"{user_summary['utilization'].mean():.2%}")
+    st.dataframe(grouped)
 
-    # Chart
-    st.subheader("Utilization by User")
-    st.bar_chart(user_summary.set_index("User")["utilization"])
-
-    st.subheader("Detail")
-    st.dataframe(user_summary)
+    st.bar_chart(grouped.set_index("User")["Hours"])
