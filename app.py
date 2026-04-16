@@ -3,11 +3,14 @@ import pandas as pd
 import re
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from datetime import datetime
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 
-st.title("📊 Team Utilization Dashboard")
+# ---------- MONTH DISPLAY ----------
+current_month = datetime.now().strftime("%B %Y")
+st.title(f"📊 Team Utilization Dashboard - {current_month}")
 
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
@@ -50,7 +53,10 @@ def transform(df):
         st.error("❌ File must contain columns: User, Project, Total")
         return None
 
+    # exclude total rows and summary users
     df = df[df["Project"].str.strip().str.lower() != "total"]
+    df = df[df["User"].str.strip().str.lower() != "summary"]
+
     df["Hours"] = df["Total"].apply(parse_time_to_hours)
 
     return df
@@ -92,58 +98,63 @@ if uploaded_file:
         display_table = pd.concat([project_summary, total_row], ignore_index=True)
 
         st.subheader(f"📊 {selected_user} - Hours per Project")
-        st.dataframe(display_table, hide_index=True)
+        st.dataframe(display_table, hide_index=True, use_container_width=True)
 
         # ---------- COLOR LOGIC ----------
         def get_color(project):
             p = project.lower()
             if "s9 - work order" in p:
-                return "#ef4444"  # red
+                return "#ef4444"
             elif "s9 - tech support" in p:
-                return "#3b82f6"  # blue
-            return "#22c55e"      # green
+                return "#3b82f6"
+            return "#22c55e"
 
         colors = [get_color(p) for p in project_summary["Project"]]
 
-        # ---------- BAR CHART ----------
-        fig, ax = plt.subplots()
+        # ---------- CENTERED CHART LAYOUT ----------
+        col_left, col_center, col_right = st.columns([1, 3, 1])
 
-        ax.barh(
-            project_summary["Project"],
-            project_summary["Hours"],
-            color=colors
-        )
+        with col_center:
+            fig, ax = plt.subplots(figsize=(10, 5))
 
-        # max = total logged hours (your requirement)
-        ax.set_xlim(0, total_logged)
+            ax.barh(
+                project_summary["Project"],
+                project_summary["Hours"],
+                color=colors
+            )
 
-        ax.set_xlabel("Hours")
-        ax.set_ylabel("Project")
-        ax.set_title("Hours per Project (Max = Total Logged Hours)")
+            ax.set_xlim(0, total_logged)
 
-        legend_elements = [
-            Patch(facecolor="#ef4444", label="S9 - Work Order"),
-            Patch(facecolor="#3b82f6", label="S9 - Tech Support"),
-            Patch(facecolor="#22c55e", label="Other Projects"),
-        ]
-        ax.legend(handles=legend_elements)
+            ax.set_xlabel("Hours")
+            ax.set_ylabel("Project")
+            ax.set_title("Hours per Project (Max = Total Logged Hours)")
 
-        st.pyplot(fig)
+            legend_elements = [
+                Patch(facecolor="#ef4444", label="S9 - Work Order"),
+                Patch(facecolor="#3b82f6", label="S9 - Tech Support"),
+                Patch(facecolor="#22c55e", label="Other Projects"),
+            ]
+            ax.legend(handles=legend_elements)
+
+            st.pyplot(fig)
 
         # ---------- PIE CHART ----------
         st.subheader("📌 Project Distribution")
 
-        fig2, ax2 = plt.subplots()
+        col_left2, col_center2, col_right2 = st.columns([1, 2, 1])
 
-        ax2.pie(
-            project_summary["Hours"],
-            labels=project_summary["Project"],
-            autopct="%1.1f%%"
-        )
+        with col_center2:
+            fig2, ax2 = plt.subplots(figsize=(5, 5))
 
-        ax2.set_title("Project Distribution")
+            ax2.pie(
+                project_summary["Hours"],
+                labels=project_summary["Project"],
+                autopct="%1.1f%%"
+            )
 
-        st.pyplot(fig2)
+            ax2.set_title("Project Distribution")
+
+            st.pyplot(fig2)
 
         # ---------- UTILIZATION ----------
         non_s9_work_order_hours = user_df[
