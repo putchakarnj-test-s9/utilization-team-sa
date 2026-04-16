@@ -6,7 +6,7 @@ from matplotlib.patches import Patch
 from datetime import datetime
 
 # ---------- PAGE CONFIG ----------
-st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
+st.set_page_config(page_title=" 🖥 Team Utilization Dashboard", layout="wide")
 
 # ---------- MONTH DISPLAY (FROM FILE NAME) ----------
 def extract_month_from_filename(filename):
@@ -22,7 +22,7 @@ def extract_month_from_filename(filename):
     return None
 
 # Default title
-st.title("📊 Team Utilization Dashboard")
+st.title("Utilization Dashboard")
 
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
@@ -95,7 +95,7 @@ if uploaded_file:
 
         # ---------- USER SELECT ----------
         users = sorted(df["User"].unique())
-        selected_user = st.selectbox("👤 Select User", users)
+        selected_user = st.selectbox("🙎 Select User", users)
 
         user_df = df[df["User"] == selected_user]
 
@@ -117,7 +117,7 @@ if uploaded_file:
 
         display_table = pd.concat([project_summary, total_row], ignore_index=True)
 
-        st.subheader(f"📊 {selected_user} - Hours per Project")
+        st.subheader(f"⏱ {selected_user} - Hours per Project")
         st.dataframe(display_table, hide_index=True, use_container_width=True)
 
         # ---------- COLOR LOGIC ----------
