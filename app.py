@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from datetime import datetime
 
-from datetime import datetime
-import re
+# ---------- PAGE CONFIG ----------
+st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 
 # ---------- MONTH DISPLAY (FROM FILE NAME) ----------
 def extract_month_from_filename(filename):
@@ -14,27 +14,15 @@ def extract_month_from_filename(filename):
     
     if match:
         day, month, year = match.group(1), match.group(2), match.group(3)
-        
         try:
             date_obj = datetime.strptime(f"{day}.{month}.{year}", "%d.%m.%Y")
-            return date_obj.strftime("%B %Y")  # e.g. March 2026
+            return date_obj.strftime("%B %Y")
         except:
             return None
-
     return None
 
-# ---------- PAGE CONFIG ----------
-st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
-
-
-# ---------- SET TITLE FROM FILE NAME ----------
-month_label = extract_month_from_filename(uploaded_file.name)
-
-if month_label:
-    st.title(f"📊 Team Utilization Dashboard - {month_label}")
-else:
-    st.title("📊 Team Utilization Dashboard")
-
+# Default title
+st.title("📊 Team Utilization Dashboard")
 
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
@@ -77,7 +65,7 @@ def transform(df):
         st.error("❌ File must contain columns: User, Project, Total")
         return None
 
-    # exclude total rows and summary users
+    # Exclude unwanted rows
     df = df[df["Project"].str.strip().str.lower() != "total"]
     df = df[df["User"].str.strip().str.lower() != "summary"]
 
@@ -92,6 +80,14 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file:
+
+    # ---------- SET TITLE FROM FILE NAME ----------
+    month_label = extract_month_from_filename(uploaded_file.name)
+    if month_label:
+        st.title(f"📊 Team Utilization Dashboard - {month_label}")
+    else:
+        st.title("📊 Team Utilization Dashboard")
+
     df_raw = load_file(uploaded_file)
     df = transform(df_raw)
 
@@ -113,7 +109,7 @@ if uploaded_file:
 
         total_logged = project_summary["Hours"].sum()
 
-        # add total row
+        # Add TOTAL row
         total_row = pd.DataFrame({
             "Project": ["TOTAL"],
             "Hours": [total_logged]
@@ -128,17 +124,17 @@ if uploaded_file:
         def get_color(project):
             p = project.lower()
             if "s9 - work order" in p:
-                return "#ef4444"
+                return "#ef4444"  # red
             elif "s9 - tech support" in p:
-                return "#3b82f6"
-            return "#22c55e"
+                return "#3b82f6"  # blue
+            return "#22c55e"      # green
 
         colors = [get_color(p) for p in project_summary["Project"]]
 
-        # ---------- CENTERED CHART LAYOUT ----------
-        col_left, col_center, col_right = st.columns([1, 3, 1])
+        # ---------- BAR CHART (CENTERED) ----------
+        col1, col2, col3 = st.columns([1, 3, 1])
 
-        with col_center:
+        with col2:
             fig, ax = plt.subplots(figsize=(10, 5))
 
             ax.barh(
@@ -165,9 +161,9 @@ if uploaded_file:
         # ---------- PIE CHART ----------
         st.subheader("📌 Project Distribution")
 
-        col_left2, col_center2, col_right2 = st.columns([1, 2, 1])
+        col4, col5, col6 = st.columns([1, 2, 1])
 
-        with col_center2:
+        with col5:
             fig2, ax2 = plt.subplots(figsize=(5, 5))
 
             ax2.pie(
@@ -185,8 +181,11 @@ if uploaded_file:
             ~user_df["Project"].str.lower().str.contains("s9 - work order")
         ]["Hours"].sum()
 
-        utilization = round((non_s9_work_order_hours / total_logged) * 100, 0) if total_logged > 0 else 0
+        utilization = round(
+            (non_s9_work_order_hours / total_logged) * 100, 0
+        ) if total_logged > 0 else 0
 
+        # ---------- METRICS ----------
         st.subheader("📈 Utilization Summary")
 
         col1, col2 = st.columns(2)
