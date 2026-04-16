@@ -1,13 +1,16 @@
 import streamlit as st
 import pandas as pd
 import re
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
-st.set_page_config(page_title="Team Utilization", layout="wide")
+# ---------- PAGE CONFIG ----------
+st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 
 st.title("📊 Team Utilization Dashboard")
 
 # ---------- CONFIG ----------
-CAPACITY_HOURS = 160
+CAPACITY_HOURS = 160  # 1 month capacity
 
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
@@ -33,66 +36,37 @@ def parse_time_to_hours(time_str):
 
 # ---------- FILE READER ----------
 def load_file(file):
-    filename = file.name.lower()
+    name = file.name.lower()
 
-    if filename.endswith(".xlsx"):
-        df = pd.read_excel(file)
-
-    elif filename.endswith(".csv"):
-        df = pd.read_csv(file)
-
+    if name.endswith(".xlsx"):
+        return pd.read_excel(file)
+    elif name.endswith(".csv"):
+        return pd.read_csv(file)
     else:
-        # try tab-separated first, fallback to comma
-        try:
-            df = pd.read_csv(file, sep="\t")
-        except:
-            df = pd.read_csv(file)
-
-    return df
+        return pd.read_csv(file, sep="\t")
 
 
 # ---------- TRANSFORM ----------
 def transform(df):
     df.columns = [c.strip() for c in df.columns]
 
-    required_cols = {"User", "Project", "Total"}
-    if not required_cols.issubset(set(df.columns)):
+    required = {"User", "Project", "Total"}
+    if not required.issubset(set(df.columns)):
         st.error("❌ File must contain columns: User, Project, Total")
         return None
 
     # remove TOTAL rows
     df = df[df["Project"].str.strip().str.lower() != "total"]
 
-    # convert time
+    # convert to hours
     df["Hours"] = df["Total"].apply(parse_time_to_hours)
 
-    # aggregate
-    grouped = df.groupby("User").agg({
-        "Hours": "sum",
-        "Project": lambda x: " · ".join(x)
-    }).reset_index()
-
-    grouped.rename(columns={"Hours": "Logged"}, inplace=True)
-
-    # calculations
-    grouped["Available"] = CAPACITY_HOURS - grouped["Logged"]
-    grouped["Utilization (%)"] = (grouped["Logged"] / CAPACITY_HOURS * 100).round(0)
-
-    def get_status(util):
-        if util >= 70:
-            return "On track"
-        elif util >= 40:
-            return "Under-used"
-        return "Critical low"
-
-    grouped["Status"] = grouped["Utilization (%)"].apply(get_status)
-
-    return grouped
+    return df
 
 
-# ---------- UI ----------
+# ---------- UPLOAD ----------
 uploaded_file = st.file_uploader(
-    "Upload your file (Excel, CSV, TXT)",
+    "Upload file (Excel / CSV / TXT)",
     type=["xlsx", "csv", "txt"]
 )
 
@@ -102,19 +76,95 @@ if uploaded_file:
     st.subheader("📄 Raw Data")
     st.dataframe(df_raw)
 
-    result = transform(df_raw)
+    df = transform(df_raw)
 
-    if result is not None:
-        st.subheader("📊 Utilization Summary")
-        st.dataframe(result)
+    if df is not None:
 
-        # charts
-        col1, col2 = st.columns(2)
+        st.subheader("📄 Clean Data (Converted to Hours)")
+        st.dataframe(df)
 
-        with col1:
-            st.subheader("Hours per Member")
-            st.bar_chart(result.set_index("User")["Logged"])
+        # ---------- USER SELECT ----------
+        users = sorted(df["User"].unique())
+        selected_user = st.selectbox("👤 Select User", users)
 
-        with col2:
-            st.subheader("Utilization %")
-            st.bar_chart(result.set_index("User")["Utilization (%)"])
+        user_df = df[df["User"] == selected_user]
+
+        # ---------- PROJECT SUMMARY ----------
+        project_summary = (
+            user_df.groupby("Project")["Hours"]
+            .sum()
+            .reset_index()
+        )
+
+        # ---------- S9 FLAG ----------
+        project_summary["is_s9"] = project_summary["Project"].str.lower().str.contains("s9")
+
+        # sort: S9 first, then hours desc
+        project_summary = project_summary.sort_values(
+            by=["is_s9", "Hours"], ascending=[False, False]
+        )
+
+        st.subheader(f"📊 {selected_user} - Hours per Project")
+        st.dataframe(project_summary.drop(columns=["is_s9"]))
+
+        # ---------- COLOR LOGIC ----------
+        colors = [
+            "#ef4444" if is_s9 else "#94a3b8"
+            for is_s9 in project_summary["is_s9"]
+        ]
+
+        # ---------- BAR CHART ----------
+        fig, ax = plt.subplots()
+
+        ax.barh(
+            project_summary["Project"],
+            project_summary["Hours"],
+            color=colors
+        )
+
+        ax.set_xlabel("Hours")
+        ax.set_ylabel("Project")
+        ax.set_title("Hours per Project (S9 Highlighted)")
+
+        # legend
+        legend_elements = [
+            Patch(facecolor="#ef4444", label="S9 Project"),
+            Patch(facecolor="#94a3b8", label="Other Projects"),
+        ]
+        ax.legend(handles=legend_elements)
+
+        st.pyplot(fig)
+
+        # ---------- PIE CHART ----------
+        st.subheader("📌 Project Distribution")
+
+        fig2, ax2 = plt.subplots()
+
+        ax2.pie(
+            project_summary["Hours"],
+            labels=project_summary["Project"],
+            autopct="%1.1f%%"
+        )
+
+        ax2.set_title("Project Distribution")
+
+        st.pyplot(fig2)
+
+        # ---------- UTILIZATION SUMMARY ----------
+        total_logged = user_df["Hours"].sum()
+        utilization = round((total_logged / CAPACITY_HOURS) * 100, 0)
+
+        if utilization >= 70:
+            status = "On track"
+        elif utilization >= 40:
+            status = "Under-used"
+        else:
+            status = "Critical low"
+
+        st.subheader("📈 Utilization Summary")
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("Total Hours", f"{total_logged:.1f} h")
+        col2.metric("Utilization", f"{utilization}%")
+        col3.metric("Status", status)
