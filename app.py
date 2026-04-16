@@ -10,7 +10,7 @@ st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 st.title("📊 Team Utilization Dashboard")
 
 # ---------- CONFIG ----------
-CAPACITY_HOURS = 160  # 1 month capacity
+CAPACITY_HOURS = 160
 
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
@@ -33,7 +33,6 @@ def parse_time_to_hours(time_str):
 
     return total_hours
 
-
 # ---------- FILE READER ----------
 def load_file(file):
     name = file.name.lower()
@@ -45,7 +44,6 @@ def load_file(file):
     else:
         return pd.read_csv(file, sep="\t")
 
-
 # ---------- TRANSFORM ----------
 def transform(df):
     df.columns = [c.strip() for c in df.columns]
@@ -55,14 +53,10 @@ def transform(df):
         st.error("❌ File must contain columns: User, Project, Total")
         return None
 
-    # remove TOTAL rows
     df = df[df["Project"].str.strip().str.lower() != "total"]
-
-    # convert to hours
     df["Hours"] = df["Total"].apply(parse_time_to_hours)
 
     return df
-
 
 # ---------- UPLOAD ----------
 uploaded_file = st.file_uploader(
@@ -72,16 +66,9 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
     df_raw = load_file(uploaded_file)
-
-    st.subheader("📄 Raw Data")
-    st.dataframe(df_raw)
-
     df = transform(df_raw)
 
     if df is not None:
-
-        st.subheader("📄 Clean Data (Converted to Hours)")
-        st.dataframe(df)
 
         # ---------- USER SELECT ----------
         users = sorted(df["User"].unique())
@@ -94,24 +81,22 @@ if uploaded_file:
             user_df.groupby("Project")["Hours"]
             .sum()
             .reset_index()
-        )
-
-        # ---------- S9 FLAG ----------
-        project_summary["is_s9"] = project_summary["Project"].str.lower().str.contains("s9")
-
-        # sort: S9 first, then hours desc
-        project_summary = project_summary.sort_values(
-            by=["is_s9", "Hours"], ascending=[False, False]
+            .sort_values(by="Hours", ascending=False)
         )
 
         st.subheader(f"📊 {selected_user} - Hours per Project")
-        st.dataframe(project_summary.drop(columns=["is_s9"]))
+        st.dataframe(project_summary)
 
         # ---------- COLOR LOGIC ----------
-        colors = [
-            "#ef4444" if is_s9 else "#94a3b8"
-            for is_s9 in project_summary["is_s9"]
-        ]
+        def get_color(project):
+            p = project.lower()
+            if "s9 - work order" in p:
+                return "#ef4444"  # red
+            elif "s9 - tech support" in p:
+                return "#3b82f6"  # blue
+            return "#22c55e"      # green
+
+        colors = [get_color(p) for p in project_summary["Project"]]
 
         # ---------- BAR CHART ----------
         fig, ax = plt.subplots()
@@ -124,12 +109,12 @@ if uploaded_file:
 
         ax.set_xlabel("Hours")
         ax.set_ylabel("Project")
-        ax.set_title("Hours per Project (S9 Highlighted)")
+        ax.set_title("Hours per Project")
 
-        # legend
         legend_elements = [
-            Patch(facecolor="#ef4444", label="S9 Project"),
-            Patch(facecolor="#94a3b8", label="Other Projects"),
+            Patch(facecolor="#ef4444", label="S9 - Work Order"),
+            Patch(facecolor="#3b82f6", label="S9 - Tech Support"),
+            Patch(facecolor="#22c55e", label="Other Projects"),
         ]
         ax.legend(handles=legend_elements)
 
@@ -150,21 +135,13 @@ if uploaded_file:
 
         st.pyplot(fig2)
 
-        # ---------- UTILIZATION SUMMARY ----------
+        # ---------- UTILIZATION ----------
         total_logged = user_df["Hours"].sum()
         utilization = round((total_logged / CAPACITY_HOURS) * 100, 0)
 
-        if utilization >= 70:
-            status = "On track"
-        elif utilization >= 40:
-            status = "Under-used"
-        else:
-            status = "Critical low"
-
         st.subheader("📈 Utilization Summary")
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
 
         col1.metric("Total Hours", f"{total_logged:.1f} h")
         col2.metric("Utilization", f"{utilization}%")
-        col3.metric("Status", status)
