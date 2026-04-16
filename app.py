@@ -5,12 +5,36 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from datetime import datetime
 
+from datetime import datetime
+import re
+
+# ---------- MONTH DISPLAY (FROM FILE NAME) ----------
+def extract_month_from_filename(filename):
+    match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})_(\d{2})\.(\d{2})\.(\d{4})", filename)
+    
+    if match:
+        day, month, year = match.group(1), match.group(2), match.group(3)
+        
+        try:
+            date_obj = datetime.strptime(f"{day}.{month}.{year}", "%d.%m.%Y")
+            return date_obj.strftime("%B %Y")  # e.g. March 2026
+        except:
+            return None
+
+    return None
+
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 
-# ---------- MONTH DISPLAY ----------
-current_month = datetime.now().strftime("%B %Y")
-st.title(f"📊 Team Utilization Dashboard - {current_month}")
+
+# ---------- SET TITLE FROM FILE NAME ----------
+month_label = extract_month_from_filename(uploaded_file.name)
+
+if month_label:
+    st.title(f"📊 Team Utilization Dashboard - {month_label}")
+else:
+    st.title("📊 Team Utilization Dashboard")
+
 
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
