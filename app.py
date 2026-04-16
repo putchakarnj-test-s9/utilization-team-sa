@@ -9,9 +9,6 @@ st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 
 st.title("📊 Team Utilization Dashboard")
 
-# ---------- CONFIG ----------
-CAPACITY_HOURS = 160
-
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
     if pd.isna(time_str):
@@ -70,7 +67,7 @@ if uploaded_file:
 
     if df is not None:
 
-        # ---------- USER SELECT ----------
+        # ---------- USER SELECT (SORTED BY NAME) ----------
         users = sorted(df["User"].unique())
         selected_user = st.selectbox("👤 Select User", users)
 
@@ -81,11 +78,11 @@ if uploaded_file:
             user_df.groupby("Project")["Hours"]
             .sum()
             .reset_index()
-            .sort_values(by="Hours", ascending=False)
+            .sort_values(by="Project")
         )
 
         st.subheader(f"📊 {selected_user} - Hours per Project")
-        st.dataframe(project_summary)
+        st.dataframe(project_summary, hide_index=True)
 
         # ---------- COLOR LOGIC ----------
         def get_color(project):
@@ -135,13 +132,18 @@ if uploaded_file:
 
         st.pyplot(fig2)
 
-        # ---------- UTILIZATION ----------
+        # ---------- UTILIZATION (EXCLUDE S9 WORK ORDER ONLY) ----------
         total_logged = user_df["Hours"].sum()
-        utilization = round((total_logged / CAPACITY_HOURS) * 100, 0)
+
+        non_s9_work_order_hours = user_df[
+            ~user_df["Project"].str.lower().str.contains("s9 - work order")
+        ]["Hours"].sum()
+
+        utilization = round((non_s9_work_order_hours / total_logged) * 100, 0) if total_logged > 0 else 0
 
         st.subheader("📈 Utilization Summary")
 
         col1, col2 = st.columns(2)
 
         col1.metric("Total Hours", f"{total_logged:.1f} h")
-        col2.metric("Utilization", f"{utilization}%")
+        col2.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
