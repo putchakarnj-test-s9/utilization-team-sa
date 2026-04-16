@@ -9,6 +9,9 @@ st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 
 st.title("📊 Team Utilization Dashboard")
 
+# ---------- CONFIG ----------
+CAPACITY_HOURS = 160  # total hours in month
+
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
     if pd.isna(time_str):
@@ -67,7 +70,7 @@ if uploaded_file:
 
     if df is not None:
 
-        # ---------- USER SELECT (SORTED BY NAME) ----------
+        # ---------- USER SELECT ----------
         users = sorted(df["User"].unique())
         selected_user = st.selectbox("👤 Select User", users)
 
@@ -95,6 +98,9 @@ if uploaded_file:
 
         colors = [get_color(p) for p in project_summary["Project"]]
 
+        # ---------- TOTAL HOURS ----------
+        total_logged = user_df["Hours"].sum()
+
         # ---------- BAR CHART ----------
         fig, ax = plt.subplots()
 
@@ -104,9 +110,12 @@ if uploaded_file:
             color=colors
         )
 
+        # set max range to total hours of month
+        ax.set_xlim(0, max(total_logged, CAPACITY_HOURS))
+
         ax.set_xlabel("Hours")
         ax.set_ylabel("Project")
-        ax.set_title("Hours per Project")
+        ax.set_title("Hours per Project (Max = Total Monthly Hours)")
 
         legend_elements = [
             Patch(facecolor="#ef4444", label="S9 - Work Order"),
@@ -132,9 +141,7 @@ if uploaded_file:
 
         st.pyplot(fig2)
 
-        # ---------- UTILIZATION (EXCLUDE S9 WORK ORDER ONLY) ----------
-        total_logged = user_df["Hours"].sum()
-
+        # ---------- UTILIZATION ----------
         non_s9_work_order_hours = user_df[
             ~user_df["Project"].str.lower().str.contains("s9 - work order")
         ]["Hours"].sum()
@@ -143,7 +150,8 @@ if uploaded_file:
 
         st.subheader("📈 Utilization Summary")
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
-        col1.metric("Total Hours", f"{total_logged:.1f} h")
-        col2.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
+        col1.metric("Total Hours (Month)", f"{total_logged:.1f} h")
+        col2.metric("Capacity", f"{CAPACITY_HOURS} h")
+        col3.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
