@@ -9,9 +9,6 @@ st.set_page_config(page_title="Team Utilization Dashboard", layout="wide")
 
 st.title("📊 Team Utilization Dashboard")
 
-# ---------- CONFIG ----------
-CAPACITY_HOURS = 160  # total hours in month
-
 # ---------- TIME PARSER ----------
 def parse_time_to_hours(time_str):
     if pd.isna(time_str):
@@ -84,8 +81,18 @@ if uploaded_file:
             .sort_values(by="Project")
         )
 
+        total_logged = project_summary["Hours"].sum()
+
+        # add total row
+        total_row = pd.DataFrame({
+            "Project": ["TOTAL"],
+            "Hours": [total_logged]
+        })
+
+        display_table = pd.concat([project_summary, total_row], ignore_index=True)
+
         st.subheader(f"📊 {selected_user} - Hours per Project")
-        st.dataframe(project_summary, hide_index=True)
+        st.dataframe(display_table, hide_index=True)
 
         # ---------- COLOR LOGIC ----------
         def get_color(project):
@@ -98,9 +105,6 @@ if uploaded_file:
 
         colors = [get_color(p) for p in project_summary["Project"]]
 
-        # ---------- TOTAL HOURS ----------
-        total_logged = user_df["Hours"].sum()
-
         # ---------- BAR CHART ----------
         fig, ax = plt.subplots()
 
@@ -110,12 +114,12 @@ if uploaded_file:
             color=colors
         )
 
-        # set max range to total hours of month
-        ax.set_xlim(0, max(total_logged, CAPACITY_HOURS))
+        # max = total logged hours (your requirement)
+        ax.set_xlim(0, total_logged)
 
         ax.set_xlabel("Hours")
         ax.set_ylabel("Project")
-        ax.set_title("Hours per Project (Max = Total Monthly Hours)")
+        ax.set_title("Hours per Project (Max = Total Logged Hours)")
 
         legend_elements = [
             Patch(facecolor="#ef4444", label="S9 - Work Order"),
@@ -150,8 +154,7 @@ if uploaded_file:
 
         st.subheader("📈 Utilization Summary")
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
 
         col1.metric("Total Hours (Month)", f"{total_logged:.1f} h")
-        col2.metric("Capacity", f"{CAPACITY_HOURS} h")
-        col3.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
+        col2.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
