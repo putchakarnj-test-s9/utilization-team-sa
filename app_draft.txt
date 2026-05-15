@@ -62,7 +62,7 @@ def transform(df):
 
     required = {"User", "Project", "Total"}
     if not required.issubset(set(df.columns)):
-        st.error("❌ File must contain columns: User, Project, Total")
+        st.error("❌ File must contain columns: User, Project, Issues, Total")
         return None
 
     # Exclude unwanted rows
