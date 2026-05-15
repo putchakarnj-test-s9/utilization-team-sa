@@ -5,29 +5,40 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from datetime import datetime
 
-# ---------- PAGE CONFIG ----------
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 st.set_page_config(
-    page_title="🖥 Team Utilization Dashboard",
+    page_title="Team Utilization Dashboard",
     layout="wide"
 )
 
-# ---------- MONTH DISPLAY (FROM FILE NAME) ----------
+# =========================================================
+# DEFAULT TITLE
+# =========================================================
+st.title("🖥 Team Utilization Dashboard")
+
+# =========================================================
+# EXTRACT MONTH FROM FILE NAME
+# Example:
+# worklogs_01.03.2026_31.03.2026.xlsx
+# =========================================================
 def extract_month_from_filename(filename):
 
-    match = re.search(
-        r"(\d{2})\.(\d{2})\.(\d{4})_(\d{2})\.(\d{2})\.(\d{4})",
-        filename
-    )
+    pattern = r"(\d{2})\.(\d{2})\.(\d{4})_(\d{2})\.(\d{2})\.(\d{4})"
+
+    match = re.search(pattern, filename)
 
     if match:
 
-        day = match.group(1)
-        month = match.group(2)
-        year = match.group(3)
+        start_day = match.group(1)
+        start_month = match.group(2)
+        start_year = match.group(3)
 
         try:
+
             date_obj = datetime.strptime(
-                f"{day}.{month}.{year}",
+                f"{start_day}.{start_month}.{start_year}",
                 "%d.%m.%Y"
             )
 
@@ -39,71 +50,90 @@ def extract_month_from_filename(filename):
     return None
 
 
-# ---------- DEFAULT TITLE ----------
-st.title("🖥 Utilization Dashboard")
+# =========================================================
+# TIME PARSER
+# 1w = 40h
+# 1d = 8h
+# =========================================================
+def parse_time_to_hours(value):
 
-
-# ---------- TIME PARSER ----------
-def parse_time_to_hours(time_str):
-
-    if pd.isna(time_str):
+    if pd.isna(value):
         return 0
 
-    text = str(time_str).lower()
+    text = str(value).lower()
 
     total_hours = 0
 
-    week_match = re.search(r'(\d+)w', text)
-    day_match = re.search(r'(\d+)d', text)
-    hour_match = re.search(r'(\d+)h', text)
-    minute_match = re.search(r'(\d+)m', text)
-
+    # weeks
+    week_match = re.search(r"(\d+)w", text)
     if week_match:
         total_hours += int(week_match.group(1)) * 40
 
+    # days
+    day_match = re.search(r"(\d+)d", text)
     if day_match:
         total_hours += int(day_match.group(1)) * 8
 
+    # hours
+    hour_match = re.search(r"(\d+)h", text)
     if hour_match:
         total_hours += int(hour_match.group(1))
 
+    # minutes
+    minute_match = re.search(r"(\d+)m", text)
     if minute_match:
         total_hours += int(minute_match.group(1)) / 60
 
     return round(total_hours, 2)
 
 
-# ---------- FILE READER ----------
-def load_file(file):
+# =========================================================
+# LOAD FILE
+# =========================================================
+def load_file(uploaded_file):
 
-    filename = file.name.lower()
+    filename = uploaded_file.name.lower()
 
-    if filename.endswith(".xlsx"):
-        return pd.read_excel(file)
+    try:
 
-    elif filename.endswith(".csv"):
-        return pd.read_csv(file)
+        if filename.endswith(".xlsx"):
+            return pd.read_excel(uploaded_file)
 
-    else:
-        return pd.read_csv(file, sep="\t")
+        elif filename.endswith(".csv"):
+            return pd.read_csv(uploaded_file)
 
+        else:
+            return pd.read_csv(uploaded_file, sep="\t")
 
-# ---------- TRANSFORM ----------
-def transform(df):
+    except Exception as e:
 
-    df.columns = [str(c).strip() for c in df.columns]
-
-    required_columns = {"User", "Project", "Total"}
-
-    if not required_columns.issubset(set(df.columns)):
-
-        st.error(
-            "❌ File must contain columns: User, Project, Total"
-        )
-
+        st.error("❌ Unable to read uploaded file")
+        st.exception(e)
         return None
 
-    # Remove unwanted rows
+
+# =========================================================
+# TRANSFORM DATA
+# =========================================================
+def transform_data(df):
+
+    if df is None:
+        return None
+
+    # clean column names
+    df.columns = [str(c).strip() for c in df.columns]
+
+    required_columns = ["User", "Project", "Total"]
+
+    for col in required_columns:
+
+        if col not in df.columns:
+            st.error(
+                f"❌ Missing required column: {col}"
+            )
+            return None
+
+    # remove TOTAL rows
     df = df[
         df["Project"]
         .astype(str)
@@ -111,6 +141,7 @@ def transform(df):
         .str.lower() != "total"
     ]
 
+    # remove SUMMARY user
     df = df[
         df["User"]
         .astype(str)
@@ -118,7 +149,7 @@ def transform(df):
         .str.lower() != "summary"
     ]
 
-    # Convert to hours
+    # create hours column
     df["Hours"] = df["Total"].apply(
         parse_time_to_hours
     )
@@ -126,17 +157,38 @@ def transform(df):
     return df
 
 
-# ---------- FILE UPLOAD ----------
+# =========================================================
+# COLOR LOGIC
+# =========================================================
+def get_project_color(project_name):
+
+    project = str(project_name).lower()
+
+    if "s9 - work order" in project:
+        return "#ef4444"  # red
+
+    elif "s9 - tech support" in project:
+        return "#3b82f6"  # blue
+
+    return "#22c55e"      # green
+
+
+# =========================================================
+# FILE UPLOAD
+# =========================================================
 uploaded_file = st.file_uploader(
-    "Upload file (Excel / CSV / TXT)",
+    "Upload Excel / CSV File",
     type=["xlsx", "csv", "txt"]
 )
 
-
-# ---------- MAIN ----------
+# =========================================================
+# MAIN
+# =========================================================
 if uploaded_file is not None:
 
-    # ---------- TITLE ----------
+    # -----------------------------------------------------
+    # UPDATE TITLE FROM FILE NAME
+    # -----------------------------------------------------
     month_label = extract_month_from_filename(
         uploaded_file.name
     )
@@ -146,290 +198,290 @@ if uploaded_file is not None:
             f"📊 Team Utilization Dashboard - {month_label}"
         )
 
-    else:
-        st.title("📊 Team Utilization Dashboard")
+    # -----------------------------------------------------
+    # LOAD DATA
+    # -----------------------------------------------------
+    raw_df = load_file(uploaded_file)
 
-    # ---------- LOAD DATA ----------
-    try:
+    # -----------------------------------------------------
+    # TRANSFORM
+    # -----------------------------------------------------
+    df = transform_data(raw_df)
 
-        df_raw = load_file(uploaded_file)
+    if df is not None and not df.empty:
 
-        df = transform(df_raw)
+        # =================================================
+        # USER SELECT
+        # =================================================
+        users = sorted(
+            df["User"]
+            .dropna()
+            .astype(str)
+            .unique()
+        )
 
-        if df is not None and not df.empty:
+        if len(users) == 0:
+            st.warning("No users found")
+            st.stop()
 
-            # ---------- USER LIST ----------
-            users = sorted(
-                df["User"]
-                .dropna()
-                .astype(str)
-                .unique()
+        selected_user = st.selectbox(
+            "🙎 Select User",
+            users
+        )
+
+        # =================================================
+        # FILTER USER DATA
+        # =================================================
+        user_df = df[
+            df["User"] == selected_user
+        ].copy()
+
+        if user_df.empty:
+            st.warning("No data found")
+            st.stop()
+
+        # =================================================
+        # PROJECT SUMMARY
+        # =================================================
+        project_summary = (
+            user_df
+            .groupby("Project")["Hours"]
+            .sum()
+            .reset_index()
+            .sort_values(by="Project")
+        )
+
+        total_logged = round(
+            project_summary["Hours"].sum(),
+            1
+        )
+
+        # =================================================
+        # DISPLAY TABLE
+        # =================================================
+        total_row = pd.DataFrame({
+            "Project": ["TOTAL"],
+            "Hours": [total_logged]
+        })
+
+        display_table = pd.concat(
+            [project_summary, total_row],
+            ignore_index=True
+        )
+
+        st.subheader(
+            f"⏱ {selected_user} - Hours per Project"
+        )
+
+        st.dataframe(
+            display_table,
+            hide_index=True,
+            use_container_width=True
+        )
+
+        # =================================================
+        # BAR CHART
+        # =================================================
+        colors = [
+            get_project_color(p)
+            for p in project_summary["Project"]
+        ]
+
+        left, center, right = st.columns([1, 3, 1])
+
+        with center:
+
+            fig, ax = plt.subplots(
+                figsize=(10, 5)
             )
 
-            if len(users) == 0:
-                st.warning("No users found.")
-                st.stop()
-
-            selected_user = st.selectbox(
-                "🙎 Select User",
-                users
+            ax.barh(
+                project_summary["Project"],
+                project_summary["Hours"],
+                color=colors
             )
 
-            # ---------- FILTER USER ----------
-            user_df = df[
-                df["User"] == selected_user
-            ].copy()
+            max_hours = total_logged
 
-            if user_df.empty:
-                st.warning("No data found for selected user.")
-                st.stop()
+            if max_hours <= 0:
+                max_hours = 1
 
-            # ---------- PROJECT SUMMARY ----------
-            project_summary = (
-                user_df
-                .groupby("Project")["Hours"]
-                .sum()
-                .reset_index()
-                .sort_values(by="Project")
+            ax.set_xlim(0, max_hours)
+
+            ax.set_xlabel("Hours")
+            ax.set_ylabel("Project")
+
+            ax.set_title(
+                "Hours per Project"
             )
 
-            total_logged = round(
-                project_summary["Hours"].sum(),
-                1
-            )
-
-            # ---------- TOTAL ROW ----------
-            total_row = pd.DataFrame({
-                "Project": ["TOTAL"],
-                "Hours": [total_logged]
-            })
-
-            display_table = pd.concat(
-                [project_summary, total_row],
-                ignore_index=True
-            )
-
-            # ---------- TABLE ----------
-            st.subheader(
-                f"⏱ {selected_user} - Hours per Project"
-            )
-
-            st.dataframe(
-                display_table,
-                hide_index=True,
-                use_container_width=True
-            )
-
-            # ---------- COLOR LOGIC ----------
-            def get_color(project):
-
-                p = str(project).lower()
-
-                if "s9 - work order" in p:
-                    return "#ef4444"
-
-                elif "s9 - tech support" in p:
-                    return "#3b82f6"
-
-                return "#22c55e"
-
-            colors = [
-                get_color(p)
-                for p in project_summary["Project"]
+            legend_items = [
+                Patch(
+                    facecolor="#ef4444",
+                    label="S9 - Work Order"
+                ),
+                Patch(
+                    facecolor="#3b82f6",
+                    label="S9 - Tech Support"
+                ),
+                Patch(
+                    facecolor="#22c55e",
+                    label="Other Projects"
+                ),
             ]
 
-            # ---------- BAR CHART ----------
-            col1, col2, col3 = st.columns([1, 3, 1])
-
-            with col2:
-
-                fig, ax = plt.subplots(
-                    figsize=(10, 5)
-                )
-
-                ax.barh(
-                    project_summary["Project"],
-                    project_summary["Hours"],
-                    color=colors
-                )
-
-                graph_max = (
-                    total_logged
-                    if total_logged > 0
-                    else 1
-                )
-
-                ax.set_xlim(0, graph_max)
-
-                ax.set_xlabel("Hours")
-                ax.set_ylabel("Project")
-
-                ax.set_title(
-                    "Hours per Project"
-                )
-
-                legend_elements = [
-                    Patch(
-                        facecolor="#ef4444",
-                        label="S9 - Work Order"
-                    ),
-                    Patch(
-                        facecolor="#3b82f6",
-                        label="S9 - Tech Support"
-                    ),
-                    Patch(
-                        facecolor="#22c55e",
-                        label="Other Projects"
-                    ),
-                ]
-
-                ax.legend(
-                    handles=legend_elements
-                )
-
-                st.pyplot(fig)
-
-            # ---------- PIE CHART ----------
-            st.subheader(
-                "📌 Project Distribution"
+            ax.legend(
+                handles=legend_items
             )
 
-            col4, col5, col6 = st.columns(
-                [1, 2, 1]
+            st.pyplot(fig)
+
+        # =================================================
+        # PIE CHART
+        # =================================================
+        st.subheader(
+            "📌 Project Distribution"
+        )
+
+        left2, center2, right2 = st.columns(
+            [1, 2, 1]
+        )
+
+        with center2:
+
+            fig2, ax2 = plt.subplots(
+                figsize=(5, 5)
             )
 
-            with col5:
+            ax2.pie(
+                project_summary["Hours"],
+                labels=project_summary["Project"],
+                autopct="%1.1f%%"
+            )
 
-                fig2, ax2 = plt.subplots(
-                    figsize=(5, 5)
-                )
+            ax2.set_title(
+                "Project Distribution"
+            )
 
-                ax2.pie(
-                    project_summary["Hours"],
-                    labels=project_summary["Project"],
-                    autopct="%1.1f%%"
-                )
+            st.pyplot(fig2)
 
-                ax2.set_title(
-                    "Project Distribution"
-                )
+        # =================================================
+        # UTILIZATION
+        # Exclude ONLY S9 Work Order
+        # =================================================
+        non_s9_hours = user_df[
+            ~user_df["Project"]
+            .astype(str)
+            .str.lower()
+            .str.contains(
+                "s9 - work order",
+                na=False
+            )
+        ]["Hours"].sum()
 
-                st.pyplot(fig2)
+        if total_logged > 0:
 
-            # ---------- UTILIZATION ----------
-            non_s9_work_order_hours = user_df[
-                ~user_df["Project"]
+            utilization = round(
+                (
+                    non_s9_hours
+                    / total_logged
+                ) * 100,
+                0
+            )
+
+        else:
+            utilization = 0
+
+        # =================================================
+        # METRICS
+        # =================================================
+        st.subheader(
+            "📈 Utilization Summary"
+        )
+
+        metric1, metric2 = st.columns(2)
+
+        metric1.metric(
+            "Total Hours (Month)",
+            f"{total_logged:.1f} h"
+        )
+
+        metric2.metric(
+            "Utilization (Exclude S9 Work Order)",
+            f"{utilization:.0f}%"
+        )
+
+        # =================================================
+        # OPTIONAL S9 BREAKDOWN
+        # only if Issues column exists
+        # =================================================
+        if "Issues" in user_df.columns:
+
+            s9_df = user_df[
+                user_df["Project"]
                 .astype(str)
                 .str.lower()
                 .str.contains(
                     "s9 - work order",
                     na=False
                 )
-            ]["Hours"].sum()
+            ].copy()
 
-            if total_logged > 0:
+            if not s9_df.empty:
 
-                utilization = round(
-                    (
-                        non_s9_work_order_hours
-                        / total_logged
-                    ) * 100,
-                    0
+                # extract SWO type
+                s9_df["SWO Type"] = (
+                    s9_df["Issues"]
+                    .astype(str)
+                    .str.extract(
+                        r"(SWO-\d+)",
+                        expand=False
+                    )
                 )
 
-            else:
-                utilization = 0
-
-            # ---------- METRICS ----------
-            st.subheader(
-                "📈 Utilization Summary"
-            )
-
-            metric_col1, metric_col2 = st.columns(2)
-
-            metric_col1.metric(
-                "Total Hours (Month)",
-                f"{total_logged:.1f} h"
-            )
-
-            metric_col2.metric(
-                "Utilization (Excl. S9 Work Order)",
-                f"{utilization:.0f}%"
-            )
-
-            # ---------- OPTIONAL S9 BREAKDOWN ----------
-            if "Issues" in user_df.columns:
-
-                s9_df = user_df[
-                    user_df["Project"]
-                    .astype(str)
-                    .str.lower()
-                    .str.contains(
-                        "s9 - work order",
-                        na=False
-                    )
-                ].copy()
+                # remove null
+                s9_df = s9_df[
+                    s9_df["SWO Type"].notna()
+                ]
 
                 if not s9_df.empty:
 
-                    # Extract SWO Type
-                    s9_df["SWO Type"] = (
-                        s9_df["Issues"]
-                        .astype(str)
-                        .str.extract(
-                            r"(SWO-\d+)",
-                            expand=False
-                        )
+                    swo_summary = (
+                        s9_df
+                        .groupby("SWO Type")["Hours"]
+                        .sum()
+                        .reset_index()
                     )
 
-                    s9_df = s9_df[
-                        s9_df["SWO Type"].notna()
-                    ]
+                    total_swo = swo_summary[
+                        "Hours"
+                    ].sum()
 
-                    if not s9_df.empty:
+                    if total_swo > 0:
 
-                        swo_summary = (
-                            s9_df
-                            .groupby("SWO Type")["Hours"]
-                            .sum()
-                            .reset_index()
+                        swo_summary["Percentage"] = (
+                            swo_summary["Hours"]
+                            / total_swo
+                            * 100
+                        ).round(0)
+
+                        st.subheader(
+                            "📌 S9 Work Order Breakdown"
                         )
 
-                        total_swo = round(
-                            swo_summary["Hours"].sum(),
-                            1
+                        swo_cols = st.columns(
+                            max(
+                                1,
+                                len(swo_summary)
+                            )
                         )
 
-                        if total_swo > 0:
+                        for idx, row in swo_summary.iterrows():
 
-                            swo_summary["Percentage"] = (
-                                swo_summary["Hours"]
-                                / total_swo
-                                * 100
-                            ).round(0)
-
-                            st.subheader(
-                                "📌 S9 Work Order Breakdown"
+                            swo_cols[idx].metric(
+                                row["SWO Type"],
+                                f"{row['Percentage']:.0f}%"
                             )
 
-                            if len(swo_summary) > 0:
-
-                                cols = st.columns(
-                                    len(swo_summary)
-                                )
-
-                                for idx, row in swo_summary.iterrows():
-
-                                    cols[idx].metric(
-                                        row["SWO Type"],
-                                        f'{row["Percentage"]:.0f}%'
-                                    )
-
-        else:
-            st.warning("No valid data found.")
-
-    except Exception as e:
-
-        st.error("❌ Error processing file")
-
-        st.exception(e)
+    else:
+        st.warning("No valid data found")
