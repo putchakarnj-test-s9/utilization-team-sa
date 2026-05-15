@@ -1,3 +1,6 @@
+# app.py
+
+```python
 import streamlit as st
 import pandas as pd
 import re
@@ -14,14 +17,14 @@ st.set_page_config(
 )
 
 # =========================================================
-# TITLE
+# DEFAULT TITLE
 # =========================================================
 st.title("🖥 Team Utilization Dashboard")
 
 # =========================================================
 # EXTRACT MONTH FROM FILE NAME
 # Example:
-# worklogs_01.03.2026_31.03.2026.xlsx
+# worklogs_01.05.2026_31.05.2026.xlsx
 # =========================================================
 def extract_month_from_filename(filename):
 
@@ -117,9 +120,14 @@ def transform_data(df):
     if df is None:
         return None
 
+    # clean column names
     df.columns = [str(c).strip() for c in df.columns]
 
-    required_columns = ["User", "Project", "Total"]
+    required_columns = [
+        "User",
+        "Project",
+        "Total"
+    ]
 
     for col in required_columns:
 
@@ -131,15 +139,7 @@ def transform_data(df):
 
             return None
 
-    # remove TOTAL rows
-    df = df[
-        df["Project"]
-        .astype(str)
-        .str.strip()
-        .str.lower() != "total"
-    ]
-
-    # remove SUMMARY rows
+    # remove summary rows
     df = df[
         df["User"]
         .astype(str)
@@ -147,7 +147,26 @@ def transform_data(df):
         .str.lower() != "summary"
     ]
 
-    # create Hours column
+    # remove total project rows
+    df = df[
+        df["Project"]
+        .astype(str)
+        .str.strip()
+        .str.lower() != "total"
+    ]
+
+    # remove rows where issue = total
+    if "Issues" in df.columns:
+
+        df = df[
+            ~df["Issues"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .eq("total")
+        ]
+
+    # create hours column
     df["Hours"] = df["Total"].apply(
         parse_time_to_hours
     )
@@ -156,28 +175,69 @@ def transform_data(df):
 
 
 # =========================================================
-# PROJECT COLORS
+# PROJECT COLOR
 # =========================================================
 def get_project_color(project_name):
 
     project = str(project_name).lower()
 
     if "s9 - work order" in project:
-        return "#ef4444"  # red
+        return "#ef4444"
 
     elif "s9 - tech support" in project:
-        return "#3b82f6"  # blue
+        return "#3b82f6"
 
-    return "#22c55e"      # green
+    return "#22c55e"
 
 
 # =========================================================
-# FILE UPLOAD
+# EXTRACT SWO DETAIL
+# =========================================================
+def extract_swo_detail(issue_text):
+
+    text = str(issue_text).strip()
+
+    swo_match = re.search(
+        r"(SWO-\d+)",
+        text,
+        re.IGNORECASE
+    )
+
+    if swo_match:
+        swo_type = swo_match.group(1).upper()
+    else:
+        swo_type = "Other"
+
+    description = re.sub(
+        r"SWO-\d+",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    description = (
+        description
+        .replace(":", "")
+        .strip()
+    )
+
+    if description == "" or description.lower() == "none":
+        description = "General"
+
+    return pd.Series([
+        swo_type,
+        description
+    ])
+
+
+# =========================================================
+# FILE UPLOADER
 # =========================================================
 uploaded_file = st.file_uploader(
     "Upload Excel / CSV File",
     type=["xlsx", "csv", "txt"]
 )
+
 
 # =========================================================
 # MAIN
@@ -185,7 +245,7 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
 
     # =====================================================
-    # TITLE FROM FILE NAME
+    # MONTH LABEL
     # =====================================================
     month_label = extract_month_from_filename(
         uploaded_file.name
@@ -248,7 +308,7 @@ if uploaded_file is not None:
         )
 
         # =================================================
-        # DISPLAY TABLE
+        # SUMMARY TABLE
         # =================================================
         st.subheader(
             f"⏱ {selected_user} - Hours per Project"
@@ -278,9 +338,9 @@ if uploaded_file is not None:
             for p in project_summary["Project"]
         ]
 
-        col1, col2, col3 = st.columns([1, 3, 1])
+        left, center, right = st.columns([1, 3, 1])
 
-        with col2:
+        with center:
 
             fig, ax = plt.subplots(
                 figsize=(10, 5)
@@ -318,7 +378,7 @@ if uploaded_file is not None:
                 Patch(
                     facecolor="#22c55e",
                     label="Other Projects"
-                ),
+                )
             ]
 
             ax.legend(
@@ -330,11 +390,13 @@ if uploaded_file is not None:
         # =================================================
         # PIE CHART
         # =================================================
-        st.subheader("📌 Project Distribution")
+        st.subheader(
+            "📌 Project Distribution"
+        )
 
-        col4, col5, col6 = st.columns([1, 2, 1])
+        left2, center2, right2 = st.columns([1, 2, 1])
 
-        with col5:
+        with center2:
 
             fig2, ax2 = plt.subplots(
                 figsize=(5, 5)
@@ -354,7 +416,7 @@ if uploaded_file is not None:
 
         # =================================================
         # UTILIZATION
-        # exclude ONLY S9 Work Order
+        # exclude S9 work order only
         # =================================================
         non_s9_hours = user_df[
             ~user_df["Project"]
@@ -377,13 +439,14 @@ if uploaded_file is not None:
             )
 
         else:
-
             utilization = 0
 
         # =================================================
         # METRICS
         # =================================================
-        st.subheader("📈 Utilization Summary")
+        st.subheader(
+            "📈 Utilization Summary"
+        )
 
         metric1, metric2 = st.columns(2)
 
@@ -415,71 +478,35 @@ if uploaded_file is not None:
             if not s9_df.empty:
 
                 st.subheader(
-                    "📝 S9 Work Order Details"
+                    "📝 S9 Work Order Breakdown"
                 )
 
                 # =============================================
-                # EXTRACT SWO DETAILS
-                # =============================================
-                def extract_s9_detail(issue_text):
-
-                    text = str(issue_text).strip()
-
-                    swo_match = re.search(
-                        r"(SWO-\d+)",
-                        text,
-                        re.IGNORECASE
-                    )
-
-                    if swo_match:
-                        swo_type = swo_match.group(1).upper()
-                    else:
-                        swo_type = "Other"
-
-                    description = re.sub(
-                        r"SWO-\d+",
-                        "",
-                        text,
-                        flags=re.IGNORECASE
-                    )
-
-                    description = (
-                        description
-                        .replace(":", "")
-                        .strip()
-                    )
-
-                    if description == "":
-                        description = "Other"
-
-                    return pd.Series([
-                        swo_type,
-                        description
-                    ])
-
-                # =============================================
-                # CREATE DETAIL COLUMNS
+                # EXTRACT DETAIL
                 # =============================================
                 s9_df[
                     ["SWO Type", "Description"]
                 ] = s9_df["Issues"].apply(
-                    extract_s9_detail
+                    extract_swo_detail
                 )
 
                 # =============================================
-                # SUMMARY
+                # GROUP DATA
                 # =============================================
                 detail_summary = (
                     s9_df
                     .groupby(
-                        ["SWO Type", "Description"]
+                        [
+                            "SWO Type",
+                            "Description"
+                        ]
                     )["Hours"]
                     .sum()
                     .reset_index()
                 )
 
                 # =============================================
-                # TYPE TOTAL
+                # TOTAL PER TYPE
                 # =============================================
                 detail_summary["Type Total"] = (
                     detail_summary
@@ -497,10 +524,13 @@ if uploaded_file is not None:
                 ).round(0)
 
                 # =============================================
-                # SORT
+                # SORTING
                 # =============================================
                 detail_summary = detail_summary.sort_values(
-                    by=["SWO Type", "Hours"],
+                    by=[
+                        "SWO Type",
+                        "Hours"
+                    ],
                     ascending=[True, False]
                 )
 
@@ -522,4 +552,22 @@ if uploaded_file is not None:
 
     else:
 
-        st.warning("No valid data found")
+        st.warning(
+            "No valid data found"
+        )
+
+```
+
+# requirements.txt
+
+```txt
+streamlit
+pandas
+matplotlib
+openpyxl
+```
+
+# Files required in your repo
+
+1. app.py
+2. requirements.txt
