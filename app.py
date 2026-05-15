@@ -192,38 +192,49 @@ def extract_swo_detail(issue_text):
 
     text = str(issue_text).strip()
 
+    # normalize spaces only
+    text = re.sub(r"\s+", " ", text)
+
+    # ---------------------------------------------
+    # detect SWO type
+    # ---------------------------------------------
     swo_match = re.search(
-        r"(SWO-\d+)",
+        r"(SWO\s*-\s*\d+)",
         text,
         re.IGNORECASE
     )
 
     if swo_match:
-        swo_type = swo_match.group(1).upper()
+
+        swo_type = (
+            swo_match.group(1)
+            .upper()
+            .replace(" ", "")
+        )
+
     else:
+
         swo_type = "Other"
 
+    # ---------------------------------------------
+    # description = original issue label
+    # remove only SWO code prefix
+    # ---------------------------------------------
     description = re.sub(
-        r"SWO-\d+",
+        r"^SWO\s*-\s*\d+\s*:?\s*",
         "",
         text,
         flags=re.IGNORECASE
-    )
+    ).strip()
 
-    description = (
-        description
-        .replace(":", "")
-        .strip()
-    )
-
-    if description == "" or description.lower() == "none":
-        description = "General"
+    # fallback
+    if description == "":
+        description = text
 
     return pd.Series([
         swo_type,
         description
     ])
-
 
 # =========================================================
 # FILE UPLOADER
