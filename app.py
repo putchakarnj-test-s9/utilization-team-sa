@@ -472,52 +472,124 @@ if uploaded_file is not None:
         )
 
         # =================================================
-        # S9 WORK ORDER DETAILS
+# S9 WORK ORDER DETAILS
+# =================================================
+if "Issues" in user_df.columns:
+
+    s9_df = user_df[
+        user_df["Project"]
+        .astype(str)
+        .str.lower()
+        .str.contains(
+            "s9 - work order",
+            na=False
+        )
+    ].copy()
+
+    if not s9_df.empty:
+
+        st.subheader(
+            "📝 S9 Work Order Details"
+        )
+
         # =================================================
-        if "Issues" in user_df.columns:
+        # EXTRACT SWO DETAILS
+        # =================================================
+        def extract_s9_detail(issue_text):
 
-            s9_df = user_df[
-                user_df["Project"]
-                .astype(str)
-                .str.lower()
-                .str.contains(
-                    "s9 - work order",
-                    na=False
-                )
-            ].copy()
+            text = str(issue_text).strip()
 
-            if not s9_df.empty:
+            # extract SWO type
+            swo_match = re.search(
+                r"(SWO-\d+)",
+                text,
+                re.IGNORECASE
+            )
 
-                st.subheader(
-                    "📝 S9 Work Order Details"
-                )
+            if swo_match:
+                swo_type = swo_match.group(1).upper()
+            else:
+                swo_type = "Other"
 
-                # create detail columns
-                s9_df[
-                    ["SWO Type", "Description"]
-                ] = s9_df["Issues"].apply(
-                    extract_s9_detail
-                )
+            # remove SWO code
+            description = re.sub(
+                r"SWO-\d+",
+                "",
+                text,
+                flags=re.IGNORECASE
+            )
 
-                # summary
-                detail_summary = (
-                    s9_df
-                    .groupby(
-                        ["SWO Type", "Description"]
-                    )["Hours"]
-                    .sum()
-                    .reset_index()
-                    .sort_values(
-                        by=["SWO Type", "Hours"],
-                        ascending=[True, False]
-                    )
-                )
+            description = (
+                description
+                .replace(":", "")
+                .strip()
+            )
 
-                st.dataframe(
-                    detail_summary,
-                    hide_index=True,
-                    use_container_width=True
-                )
+            if description == "":
+                description = "Other"
 
-    else:
-        st.warning("No valid data found")
+            return pd.Series([
+                swo_type,
+                description
+            ])
+
+        # =================================================
+        # CREATE DETAIL COLUMNS
+        # =================================================
+        s9_df[
+            ["SWO Type", "Description"]
+        ] = s9_df["Issues"].apply(
+            extract_s9_detail
+        )
+
+        # =================================================
+        # SUMMARY HOURS
+        # =================================================
+        detail_summary = (
+            s9_df
+            .groupby(
+                ["SWO Type", "Description"]
+            )["Hours"]
+            .sum()
+            .reset_index()
+        )
+
+        # =================================================
+        # CALCULATE %
+        # inside each SWO type
+        # =================================================
+        detail_summary["Type Total"] = (
+            detail_summary
+            .groupby("SWO Type")["Hours"]
+            .transform("sum")
+        )
+
+        detail_summary["Percentage"] = (
+            detail_summary["Hours"]
+            / detail_summary["Type Total"]
+            * 100
+        ).round(0)
+
+        # =================================================
+        # SORT
+        # =================================================
+        detail_summary = detail_summary.sort_values(
+            by=["SWO Type", "Hours"],
+            ascending=[True, False]
+        )
+
+        # =================================================
+        # DISPLAY
+        # =================================================
+        st.dataframe(
+            detail_summary[
+                [
+                    "SWO Type",
+                    "Description",
+                    "Hours",
+                    "Percentage"
+                ]
+            ],
+            hide_index=True,
+            use_container_width=True
+        )
