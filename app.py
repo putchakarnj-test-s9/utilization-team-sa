@@ -530,29 +530,84 @@ if uploaded_file is not None:
                             detail_df["Issues"]
                             .apply(map_swo_category)
                         )
+# =================================================
+# EXTRACT S9 DETAIL
+# =================================================
+def extract_s9_detail(issue_text):
 
-                        detail_summary = (
-                            detail_df
-                            .groupby("S9 Category")["Hours"]
-                            .sum()
-                            .reset_index()
-                            .sort_values(
-                                by="Hours",
-                                ascending=False
-                            )
-                        )
+    text = str(issue_text)
 
-                        detail_summary["Percentage"] = (
-                            detail_summary["Hours"]
-                            / detail_summary["Hours"].sum()
-                            * 100
-                        ).round(0)
+    # extract SWO type
+    swo_match = re.search(
+        r"(SWO-\d+)",
+        text,
+        re.IGNORECASE
+    )
 
-                        st.dataframe(
-                            detail_summary,
-                            hide_index=True,
-                            use_container_width=True
-                        )
+    swo_type = (
+        swo_match.group(1).upper()
+        if swo_match
+        else "UNKNOWN"
+    )
+
+    # remove SWO code from text
+    description = re.sub(
+        r"(SWO-\d+)",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    # remove symbols
+    description = (
+        description
+        .replace(":", "")
+        .replace("-", "")
+        .strip()
+    )
+
+    # fallback
+    if description == "":
+        description = "Other"
+
+    return pd.Series([
+        swo_type,
+        description
+    ])
+
+
+# =================================================
+# CREATE DETAIL TABLE
+# =================================================
+detail_df = s9_df.copy()
+
+detail_df[
+    ["SWO Type", "Description"]
+] = detail_df["Issues"].apply(
+    extract_s9_detail
+)
+
+# =================================================
+# SUMMARY
+# =================================================
+detail_summary = (
+    detail_df
+    .groupby(
+        ["SWO Type", "Description"]
+    )["Hours"]
+    .sum()
+    .reset_index()
+    .sort_values(
+        by=["SWO Type", "Hours"],
+        ascending=[True, False]
+    )
+)
+
+st.dataframe(
+    detail_summary,
+    hide_index=True,
+    use_container_width=True
+)
 
     else:
         st.warning("No valid data found")
