@@ -20,8 +20,6 @@ st.title("🖥 Team Utilization Dashboard")
 
 # =========================================================
 # EXTRACT MONTH FROM FILE NAME
-# Example:
-# worklogs_01.03.2026_31.03.2026.xlsx
 # =========================================================
 def extract_month_from_filename(filename):
 
@@ -171,6 +169,36 @@ def get_project_color(project_name):
         return "#3b82f6"  # blue
 
     return "#22c55e"      # green
+
+
+# =========================================================
+# S9 CATEGORY MAPPING
+# =========================================================
+def map_swo_category(issue_text):
+
+    text = str(issue_text).lower()
+
+    # SWO-4
+    if "swo-4" in text:
+
+        if "training" in text:
+            return "SWO-4 : Training"
+
+        elif "meeting" in text:
+            return "SWO-4 : Meeting"
+
+        else:
+            return "SWO-4 : Company Activity"
+
+    # SWO-2
+    elif "swo-2" in text:
+        return "SWO-2 : Leave"
+
+    # SWO-6
+    elif "swo-6" in text:
+        return "SWO-6 : R & D"
+
+    return "Other"
 
 
 # =========================================================
@@ -415,40 +443,97 @@ if uploaded_file is not None:
         # =================================================
         if "Issues" in user_df.columns:
 
-            try:
+            s9_df = user_df[
+                user_df["Project"]
+                .astype(str)
+                .str.lower()
+                .str.contains(
+                    "s9 - work order",
+                    na=False
+                )
+            ].copy()
 
-                s9_df = user_df[
-                    user_df["Project"]
+            if not s9_df.empty:
+
+                # extract SWO type
+                s9_df["SWO Type"] = (
+                    s9_df["Issues"]
                     .astype(str)
-                    .str.lower()
-                    .str.contains(
-                        "s9 - work order",
-                        na=False
+                    .str.extract(
+                        r"(SWO-\d+)",
+                        expand=False
                     )
-                ].copy()
+                )
+
+                s9_df = s9_df[
+                    s9_df["SWO Type"].notna()
+                ]
 
                 if not s9_df.empty:
 
-                    # extract SWO type
-                    s9_df["SWO Type"] = (
-                        s9_df["Issues"]
-                        .astype(str)
-                        .str.extract(
-                            r"(SWO-\d+)",
-                            expand=False
+                    # SUMMARY
+                    swo_summary = (
+                        s9_df
+                        .groupby("SWO Type")["Hours"]
+                        .sum()
+                        .reset_index()
+                        .sort_values(
+                            by="Hours",
+                            ascending=False
                         )
                     )
 
-                    s9_df = s9_df[
-                        s9_df["SWO Type"].notna()
-                    ]
+                    total_swo = (
+                        swo_summary["Hours"].sum()
+                    )
 
-                    if not s9_df.empty:
+                    if total_swo > 0:
 
-                        # SUMMARY
-                        swo_summary = (
-                            s9_df
-                            .groupby("SWO Type")["Hours"]
+                        swo_summary["Percentage"] = (
+                            swo_summary["Hours"]
+                            / total_swo
+                            * 100
+                        ).round(0)
+
+                        st.subheader(
+                            "📌 S9 Work Order Breakdown"
+                        )
+
+                        col_count = len(swo_summary)
+
+                        if col_count <= 0:
+                            col_count = 1
+
+                        swo_cols = st.columns(
+                            col_count
+                        )
+
+                        for i in range(col_count):
+
+                            row = swo_summary.iloc[i]
+
+                            swo_cols[i].metric(
+                                row["SWO Type"],
+                                f"{row['Percentage']:.0f}%"
+                            )
+
+                        # =================================================
+                        # EXPANDED CATEGORY SUMMARY
+                        # =================================================
+                        st.subheader(
+                            "📝 S9 Work Order Details"
+                        )
+
+                        detail_df = s9_df.copy()
+
+                        detail_df["S9 Category"] = (
+                            detail_df["Issues"]
+                            .apply(map_swo_category)
+                        )
+
+                        detail_summary = (
+                            detail_df
+                            .groupby("S9 Category")["Hours"]
                             .sum()
                             .reset_index()
                             .sort_values(
@@ -457,144 +542,17 @@ if uploaded_file is not None:
                             )
                         )
 
-                        total_swo = (
-                            swo_summary["Hours"].sum()
+                        detail_summary["Percentage"] = (
+                            detail_summary["Hours"]
+                            / detail_summary["Hours"].sum()
+                            * 100
+                        ).round(0)
+
+                        st.dataframe(
+                            detail_summary,
+                            hide_index=True,
+                            use_container_width=True
                         )
-
-                        if total_swo > 0:
-
-                            swo_summary["Percentage"] = (
-                                swo_summary["Hours"]
-                                / total_swo
-                                * 100
-                            ).round(0)
-
-                            st.subheader(
-                                "📌 S9 Work Order Breakdown"
-                            )
-
-                            col_count = len(swo_summary)
-
-                            if col_count <= 0:
-                                col_count = 1
-
-                            swo_cols = st.columns(
-                                col_count
-                            )
-
-                            for i in range(col_count):
-
-                                row = swo_summary.iloc[i]
-
-                                swo_cols[i].metric(
-                                    row["SWO Type"],
-                                    f"{row['Percentage']:.0f}%"
-                                )
-
-                            # DETAILS TABLE
-                            st.subheader(
-                                "📝 S9 Work Order Details"
-                            )
-
-                            detail_df = s9_df[
-                                [
-                                    "SWO Type",
-                                    "Issues",
-                                    "Hours"
-                                ]
-                            ].copy()
-
-                            detail_df = detail_df.sort_values(
-                                by=[
-                                    "SWO Type",
-                                    "Hours"
-                                ],
-                                ascending=[
-                                    True,
-                                    False
-                                ]
-                            )
-
-                            st.dataframe(
-                                detail_df,
-                                hide_index=True,
-                                use_container_width=True
-                            )
-
-            except Exception as e:
-
-                st.error(
-                    "Error loading S9 details"
-                )
-
-                st.exception(e)
 
     else:
         st.warning("No valid data found")
-
-
-# =================================================
-# S9 CATEGORY MAPPING
-# =================================================
-def map_swo_category(issue_text):
-
-    text = str(issue_text).lower()
-
-    # SWO-4
-    if "swo-4" in text:
-
-        if "training" in text:
-            return "SWO-4 : Training"
-
-        elif "meeting" in text:
-            return "SWO-4 : Meeting"
-
-        return "SWO-4 : Company Activity"
-
-    # SWO-2
-    elif "swo-2" in text:
-        return "SWO-2 : Leave"
-
-    # SWO-6
-    elif "swo-6" in text:
-        return "SWO-6 : R & D"
-
-    return "Other"
-
-
-# =================================================
-# EXPANDED DETAILS
-# =================================================
-st.subheader(
-    "📝 S9 Work Order Details"
-)
-
-# create category
-s9_df["S9 Category"] = s9_df["Issues"].apply(
-    map_swo_category
-)
-
-# summary
-detail_summary = (
-    s9_df
-    .groupby("S9 Category")["Hours"]
-    .sum()
-    .reset_index()
-    .sort_values(
-        by="Hours",
-        ascending=False
-    )
-)
-
-detail_summary["Percentage"] = (
-    detail_summary["Hours"]
-    / detail_summary["Hours"].sum()
-    * 100
-).round(0)
-
-# display table
-st.dataframe(
-    detail_summary,
-    hide_index=True,
-    use_container_width=True
-)
