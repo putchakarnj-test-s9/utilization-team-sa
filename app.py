@@ -531,3 +531,70 @@ if uploaded_file is not None:
 
     else:
         st.warning("No valid data found")
+
+
+# =================================================
+# S9 CATEGORY MAPPING
+# =================================================
+def map_swo_category(issue_text):
+
+    text = str(issue_text).lower()
+
+    # SWO-4
+    if "swo-4" in text:
+
+        if "training" in text:
+            return "SWO-4 : Training"
+
+        elif "meeting" in text:
+            return "SWO-4 : Meeting"
+
+        return "SWO-4 : Company Activity"
+
+    # SWO-2
+    elif "swo-2" in text:
+        return "SWO-2 : Leave"
+
+    # SWO-6
+    elif "swo-6" in text:
+        return "SWO-6 : R & D"
+
+    return "Other"
+
+
+# =================================================
+# EXPANDED DETAILS
+# =================================================
+st.subheader(
+    "📝 S9 Work Order Details"
+)
+
+# create category
+s9_df["S9 Category"] = s9_df["Issues"].apply(
+    map_swo_category
+)
+
+# summary
+detail_summary = (
+    s9_df
+    .groupby("S9 Category")["Hours"]
+    .sum()
+    .reset_index()
+    .sort_values(
+        by="Hours",
+        ascending=False
+    )
+)
+
+detail_summary["Percentage"] = (
+    detail_summary["Hours"]
+    / detail_summary["Hours"].sum()
+    * 100
+).round(0)
+
+# display table
+st.dataframe(
+    detail_summary,
+    hide_index=True,
+    use_container_width=True
+)
