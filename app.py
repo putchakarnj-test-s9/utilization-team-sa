@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# DEFAULT TITLE
+# TITLE
 # =========================================================
 st.title("🖥 Team Utilization Dashboard")
 
@@ -142,7 +142,7 @@ def transform_data(df):
         .str.lower() != "summary"
     ]
 
-    # remove TOTAL rows
+    # remove TOTAL project rows
     df = df[
         df["Project"]
         .astype(str)
@@ -150,15 +150,17 @@ def transform_data(df):
         .str.lower() != "total"
     ]
 
-    # remove issue = total
+    # remove Issues = Total rows
     if "Issues" in df.columns:
 
         df = df[
-            ~df["Issues"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            .eq("total")
+            ~(
+                df["Issues"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                == "total"
+            )
         ]
 
     # convert hours
@@ -170,7 +172,7 @@ def transform_data(df):
 
 
 # =========================================================
-# PROJECT COLOR
+# PROJECT COLORS
 # =========================================================
 def get_project_color(project_name):
 
@@ -192,12 +194,10 @@ def extract_swo_detail(issue_text):
 
     text = str(issue_text).strip()
 
-    # normalize spaces only
+    # normalize spaces
     text = re.sub(r"\s+", " ", text)
 
-    # ---------------------------------------------
     # detect SWO type
-    # ---------------------------------------------
     swo_match = re.search(
         r"(SWO\s*-\s*\d+)",
         text,
@@ -216,10 +216,7 @@ def extract_swo_detail(issue_text):
 
         swo_type = "Other"
 
-    # ---------------------------------------------
-    # description = original issue label
-    # remove only SWO code prefix
-    # ---------------------------------------------
+    # description from issue label
     description = re.sub(
         r"^SWO\s*-\s*\d+\s*:?\s*",
         "",
@@ -227,7 +224,6 @@ def extract_swo_detail(issue_text):
         flags=re.IGNORECASE
     ).strip()
 
-    # fallback
     if description == "":
         description = text
 
@@ -235,6 +231,7 @@ def extract_swo_detail(issue_text):
         swo_type,
         description
     ])
+
 
 # =========================================================
 # FILE UPLOADER
@@ -268,7 +265,7 @@ if uploaded_file is not None:
     raw_df = load_file(uploaded_file)
 
     # =====================================================
-    # TRANSFORM DATA
+    # TRANSFORM
     # =====================================================
     df = transform_data(raw_df)
 
@@ -290,7 +287,7 @@ if uploaded_file is not None:
         )
 
         # =================================================
-        # FILTER USER DATA
+        # USER DATA
         # =================================================
         user_df = df[
             df["User"] == selected_user
@@ -465,7 +462,7 @@ if uploaded_file is not None:
         )
 
         # =================================================
-        # S9 WORK ORDER DETAILS
+        # S9 WORK ORDER BREAKDOWN
         # =================================================
         if "Issues" in user_df.columns:
 
@@ -479,13 +476,18 @@ if uploaded_file is not None:
                 )
             ].copy()
 
+            # remove null issues
+            s9_df = s9_df[
+                s9_df["Issues"].notna()
+            ]
+
             if not s9_df.empty:
 
                 st.subheader(
                     "📝 S9 Work Order Breakdown"
                 )
 
-                # extract details
+                # extract SWO details
                 s9_df[
                     ["SWO Type", "Description"]
                 ] = s9_df["Issues"].apply(
@@ -505,7 +507,7 @@ if uploaded_file is not None:
                     .reset_index()
                 )
 
-                # total by type
+                # total per SWO type
                 detail_summary["Type Total"] = (
                     detail_summary
                     .groupby("SWO Type")["Hours"]
@@ -519,7 +521,7 @@ if uploaded_file is not None:
                     * 100
                 ).round(0)
 
-                # sort
+                # sorting
                 detail_summary = detail_summary.sort_values(
                     by=[
                         "SWO Type",
