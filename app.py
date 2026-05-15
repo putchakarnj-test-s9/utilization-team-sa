@@ -1,6 +1,3 @@
-# app.py
-
-```python
 import streamlit as st
 import pandas as pd
 import re
@@ -23,8 +20,6 @@ st.title("🖥 Team Utilization Dashboard")
 
 # =========================================================
 # EXTRACT MONTH FROM FILE NAME
-# Example:
-# worklogs_01.05.2026_31.05.2026.xlsx
 # =========================================================
 def extract_month_from_filename(filename):
 
@@ -120,7 +115,7 @@ def transform_data(df):
     if df is None:
         return None
 
-    # clean column names
+    # clean columns
     df.columns = [str(c).strip() for c in df.columns]
 
     required_columns = [
@@ -139,7 +134,7 @@ def transform_data(df):
 
             return None
 
-    # remove summary rows
+    # remove SUMMARY rows
     df = df[
         df["User"]
         .astype(str)
@@ -147,7 +142,7 @@ def transform_data(df):
         .str.lower() != "summary"
     ]
 
-    # remove total project rows
+    # remove TOTAL rows
     df = df[
         df["Project"]
         .astype(str)
@@ -155,7 +150,7 @@ def transform_data(df):
         .str.lower() != "total"
     ]
 
-    # remove rows where issue = total
+    # remove issue = total
     if "Issues" in df.columns:
 
         df = df[
@@ -166,7 +161,7 @@ def transform_data(df):
             .eq("total")
         ]
 
-    # create hours column
+    # convert hours
     df["Hours"] = df["Total"].apply(
         parse_time_to_hours
     )
@@ -237,7 +232,6 @@ uploaded_file = st.file_uploader(
     "Upload Excel / CSV File",
     type=["xlsx", "csv", "txt"]
 )
-
 
 # =========================================================
 # MAIN
@@ -338,9 +332,9 @@ if uploaded_file is not None:
             for p in project_summary["Project"]
         ]
 
-        left, center, right = st.columns([1, 3, 1])
+        col1, col2, col3 = st.columns([1, 3, 1])
 
-        with center:
+        with col2:
 
             fig, ax = plt.subplots(
                 figsize=(10, 5)
@@ -394,9 +388,9 @@ if uploaded_file is not None:
             "📌 Project Distribution"
         )
 
-        left2, center2, right2 = st.columns([1, 2, 1])
+        col4, col5, col6 = st.columns([1, 2, 1])
 
-        with center2:
+        with col5:
 
             fig2, ax2 = plt.subplots(
                 figsize=(5, 5)
@@ -416,7 +410,6 @@ if uploaded_file is not None:
 
         # =================================================
         # UTILIZATION
-        # exclude S9 work order only
         # =================================================
         non_s9_hours = user_df[
             ~user_df["Project"]
@@ -481,18 +474,14 @@ if uploaded_file is not None:
                     "📝 S9 Work Order Breakdown"
                 )
 
-                # =============================================
-                # EXTRACT DETAIL
-                # =============================================
+                # extract details
                 s9_df[
                     ["SWO Type", "Description"]
                 ] = s9_df["Issues"].apply(
                     extract_swo_detail
                 )
 
-                # =============================================
-                # GROUP DATA
-                # =============================================
+                # summary
                 detail_summary = (
                     s9_df
                     .groupby(
@@ -505,27 +494,21 @@ if uploaded_file is not None:
                     .reset_index()
                 )
 
-                # =============================================
-                # TOTAL PER TYPE
-                # =============================================
+                # total by type
                 detail_summary["Type Total"] = (
                     detail_summary
                     .groupby("SWO Type")["Hours"]
                     .transform("sum")
                 )
 
-                # =============================================
-                # PERCENTAGE
-                # =============================================
+                # percentage
                 detail_summary["Percentage"] = (
                     detail_summary["Hours"]
                     / detail_summary["Type Total"]
                     * 100
                 ).round(0)
 
-                # =============================================
-                # SORTING
-                # =============================================
+                # sort
                 detail_summary = detail_summary.sort_values(
                     by=[
                         "SWO Type",
@@ -534,9 +517,7 @@ if uploaded_file is not None:
                     ascending=[True, False]
                 )
 
-                # =============================================
-                # DISPLAY
-                # =============================================
+                # display
                 st.dataframe(
                     detail_summary[
                         [
@@ -555,19 +536,3 @@ if uploaded_file is not None:
         st.warning(
             "No valid data found"
         )
-
-```
-
-# requirements.txt
-
-```txt
-streamlit
-pandas
-matplotlib
-openpyxl
-```
-
-# Files required in your repo
-
-1. app.py
-2. requirements.txt
