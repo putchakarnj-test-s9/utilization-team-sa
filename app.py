@@ -278,7 +278,110 @@ if uploaded_file is not None:
             hide_index=True,
             use_container_width=True
         )
+# =================================================
+# S9 WORK ORDER DETAILS
+# =================================================
+if "Issues" in user_df.columns:
 
+    s9_df = user_df[
+        user_df["Project"]
+        .astype(str)
+        .str.lower()
+        .str.contains(
+            "s9 - work order",
+            na=False
+        )
+    ].copy()
+
+    if not s9_df.empty:
+
+        # -----------------------------------------
+        # Extract SWO Type
+        # -----------------------------------------
+        s9_df["SWO Type"] = (
+            s9_df["Issues"]
+            .astype(str)
+            .str.extract(
+                r"(SWO-\d+)",
+                expand=False
+            )
+        )
+
+        s9_df = s9_df[
+            s9_df["SWO Type"].notna()
+        ]
+
+        if not s9_df.empty:
+
+            # -----------------------------------------
+            # SWO SUMMARY
+            # -----------------------------------------
+            swo_summary = (
+                s9_df
+                .groupby("SWO Type")["Hours"]
+                .sum()
+                .reset_index()
+                .sort_values(
+                    by="Hours",
+                    ascending=False
+                )
+            )
+
+            total_swo = swo_summary["Hours"].sum()
+
+            if total_swo > 0:
+
+                swo_summary["Percentage"] = (
+                    swo_summary["Hours"]
+                    / total_swo
+                    * 100
+                ).round(0)
+
+                st.subheader(
+                    "📌 S9 Work Order Breakdown"
+                )
+
+                # -----------------------------------------
+                # KPI
+                # -----------------------------------------
+                swo_cols = st.columns(
+                    max(1, len(swo_summary))
+                )
+
+                for idx, row in swo_summary.iterrows():
+
+                    swo_cols[idx].metric(
+                        row["SWO Type"],
+                        f"{row['Percentage']:.0f}%"
+                    )
+
+                # -----------------------------------------
+                # DETAIL TABLE
+                # -----------------------------------------
+                st.subheader(
+                    "📝 S9 Work Order Details"
+                )
+
+                detail_table = (
+                    s9_df[
+                        [
+                            "SWO Type",
+                            "Issues",
+                            "Hours"
+                        ]
+                    ]
+                    .sort_values(
+                        by=["SWO Type", "Hours"],
+                        ascending=[True, False]
+                    )
+                )
+
+                st.dataframe(
+                    detail_table,
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
         # =================================================
         # BAR CHART
         # =================================================
