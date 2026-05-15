@@ -181,34 +181,51 @@ def extract_s9_detail(issue_text):
     text = str(issue_text)
 
     # extract SWO type
+# =========================================================
+# EXTRACT S9 DETAILS
+# =========================================================
+def extract_s9_detail(issue_text):
+
+    text = str(issue_text).strip()
+
+    # ---------------------------------------------
+    # extract SWO type
+    # Example:
+    # SWO-6: R & D
+    # SWO-4: Training / Meeting
+    # ---------------------------------------------
     swo_match = re.search(
         r"(SWO-\d+)",
         text,
         re.IGNORECASE
     )
 
-    swo_type = (
-        swo_match.group(1).upper()
-        if swo_match
-        else "UNKNOWN"
-    )
+    if swo_match:
 
-    # remove SWO code
+        swo_type = swo_match.group(1).upper()
+
+    else:
+
+        swo_type = "Other"
+
+    # ---------------------------------------------
+    # remove ONLY SWO code
+    # ---------------------------------------------
     description = re.sub(
-        r"(SWO-\d+)",
+        r"SWO-\d+",
         "",
         text,
         flags=re.IGNORECASE
     )
 
-    # cleanup
+    # remove colon only
     description = (
         description
         .replace(":", "")
-        .replace("-", "")
         .strip()
     )
 
+    # fallback
     if description == "":
         description = "Other"
 
@@ -216,7 +233,6 @@ def extract_s9_detail(issue_text):
         swo_type,
         description
     ])
-
 
 # =========================================================
 # FILE UPLOAD
