@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# DEFAULT TITLE
+# TITLE
 # =========================================================
 st.title("🖥 Team Utilization Dashboard")
 
@@ -64,22 +64,18 @@ def parse_time_to_hours(value):
 
     total_hours = 0
 
-    # weeks
     week_match = re.search(r"(\d+)w", text)
     if week_match:
         total_hours += int(week_match.group(1)) * 40
 
-    # days
     day_match = re.search(r"(\d+)d", text)
     if day_match:
         total_hours += int(day_match.group(1)) * 8
 
-    # hours
     hour_match = re.search(r"(\d+)h", text)
     if hour_match:
         total_hours += int(hour_match.group(1))
 
-    # minutes
     minute_match = re.search(r"(\d+)m", text)
     if minute_match:
         total_hours += int(minute_match.group(1)) / 60
@@ -109,6 +105,7 @@ def load_file(uploaded_file):
 
         st.error("❌ Unable to read uploaded file")
         st.exception(e)
+
         return None
 
 
@@ -120,7 +117,6 @@ def transform_data(df):
     if df is None:
         return None
 
-    # clean column names
     df.columns = [str(c).strip() for c in df.columns]
 
     required_columns = ["User", "Project", "Total"]
@@ -128,9 +124,11 @@ def transform_data(df):
     for col in required_columns:
 
         if col not in df.columns:
+
             st.error(
                 f"❌ Missing required column: {col}"
             )
+
             return None
 
     # remove TOTAL rows
@@ -141,7 +139,7 @@ def transform_data(df):
         .str.lower() != "total"
     ]
 
-    # remove SUMMARY user
+    # remove SUMMARY rows
     df = df[
         df["User"]
         .astype(str)
@@ -149,7 +147,7 @@ def transform_data(df):
         .str.lower() != "summary"
     ]
 
-    # create hours column
+    # create Hours column
     df["Hours"] = df["Total"].apply(
         parse_time_to_hours
     )
@@ -158,7 +156,7 @@ def transform_data(df):
 
 
 # =========================================================
-# COLOR LOGIC
+# PROJECT COLORS
 # =========================================================
 def get_project_color(project_name):
 
@@ -174,67 +172,6 @@ def get_project_color(project_name):
 
 
 # =========================================================
-# EXTRACT S9 DETAILS
-# =========================================================
-def extract_s9_detail(issue_text):
-
-    text = str(issue_text)
-
-    # extract SWO type
-# =========================================================
-# EXTRACT S9 DETAILS
-# =========================================================
-def extract_s9_detail(issue_text):
-
-    text = str(issue_text).strip()
-
-    # ---------------------------------------------
-    # extract SWO type
-    # Example:
-    # SWO-6: R & D
-    # SWO-4: Training / Meeting
-    # ---------------------------------------------
-    swo_match = re.search(
-        r"(SWO-\d+)",
-        text,
-        re.IGNORECASE
-    )
-
-    if swo_match:
-
-        swo_type = swo_match.group(1).upper()
-
-    else:
-
-        swo_type = "Other"
-
-    # ---------------------------------------------
-    # remove ONLY SWO code
-    # ---------------------------------------------
-    description = re.sub(
-        r"SWO-\d+",
-        "",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    # remove colon only
-    description = (
-        description
-        .replace(":", "")
-        .strip()
-    )
-
-    # fallback
-    if description == "":
-        description = "Other"
-
-    return pd.Series([
-        swo_type,
-        description
-    ])
-
-# =========================================================
 # FILE UPLOAD
 # =========================================================
 uploaded_file = st.file_uploader(
@@ -247,32 +184,33 @@ uploaded_file = st.file_uploader(
 # =========================================================
 if uploaded_file is not None:
 
-    # -----------------------------------------------------
-    # UPDATE TITLE FROM FILE NAME
-    # -----------------------------------------------------
+    # =====================================================
+    # TITLE FROM FILE NAME
+    # =====================================================
     month_label = extract_month_from_filename(
         uploaded_file.name
     )
 
     if month_label:
+
         st.title(
             f"📊 Team Utilization Dashboard - {month_label}"
         )
 
-    # -----------------------------------------------------
+    # =====================================================
     # LOAD DATA
-    # -----------------------------------------------------
+    # =====================================================
     raw_df = load_file(uploaded_file)
 
-    # -----------------------------------------------------
-    # TRANSFORM
-    # -----------------------------------------------------
+    # =====================================================
+    # TRANSFORM DATA
+    # =====================================================
     df = transform_data(raw_df)
 
     if df is not None and not df.empty:
 
         # =================================================
-        # USER SELECT
+        # USER DROPDOWN
         # =================================================
         users = sorted(
             df["User"]
@@ -280,10 +218,6 @@ if uploaded_file is not None:
             .astype(str)
             .unique()
         )
-
-        if len(users) == 0:
-            st.warning("No users found")
-            st.stop()
 
         selected_user = st.selectbox(
             "🙎 Select User",
@@ -296,10 +230,6 @@ if uploaded_file is not None:
         user_df = df[
             df["User"] == selected_user
         ].copy()
-
-        if user_df.empty:
-            st.warning("No data found")
-            st.stop()
 
         # =================================================
         # PROJECT SUMMARY
@@ -320,6 +250,10 @@ if uploaded_file is not None:
         # =================================================
         # DISPLAY TABLE
         # =================================================
+        st.subheader(
+            f"⏱ {selected_user} - Hours per Project"
+        )
+
         total_row = pd.DataFrame({
             "Project": ["TOTAL"],
             "Hours": [total_logged]
@@ -328,10 +262,6 @@ if uploaded_file is not None:
         display_table = pd.concat(
             [project_summary, total_row],
             ignore_index=True
-        )
-
-        st.subheader(
-            f"⏱ {selected_user} - Hours per Project"
         )
 
         st.dataframe(
@@ -348,9 +278,9 @@ if uploaded_file is not None:
             for p in project_summary["Project"]
         ]
 
-        left, center, right = st.columns([1, 3, 1])
+        col1, col2, col3 = st.columns([1, 3, 1])
 
-        with center:
+        with col2:
 
             fig, ax = plt.subplots(
                 figsize=(10, 5)
@@ -400,15 +330,11 @@ if uploaded_file is not None:
         # =================================================
         # PIE CHART
         # =================================================
-        st.subheader(
-            "📌 Project Distribution"
-        )
+        st.subheader("📌 Project Distribution")
 
-        left2, center2, right2 = st.columns(
-            [1, 2, 1]
-        )
+        col4, col5, col6 = st.columns([1, 2, 1])
 
-        with center2:
+        with col5:
 
             fig2, ax2 = plt.subplots(
                 figsize=(5, 5)
@@ -428,6 +354,7 @@ if uploaded_file is not None:
 
         # =================================================
         # UTILIZATION
+        # exclude ONLY S9 Work Order
         # =================================================
         non_s9_hours = user_df[
             ~user_df["Project"]
@@ -450,14 +377,13 @@ if uploaded_file is not None:
             )
 
         else:
+
             utilization = 0
 
         # =================================================
         # METRICS
         # =================================================
-        st.subheader(
-            "📈 Utilization Summary"
-        )
+        st.subheader("📈 Utilization Summary")
 
         metric1, metric2 = st.columns(2)
 
@@ -472,124 +398,128 @@ if uploaded_file is not None:
         )
 
         # =================================================
-# S9 WORK ORDER DETAILS
-# =================================================
-if "Issues" in user_df.columns:
-
-    s9_df = user_df[
-        user_df["Project"]
-        .astype(str)
-        .str.lower()
-        .str.contains(
-            "s9 - work order",
-            na=False
-        )
-    ].copy()
-
-    if not s9_df.empty:
-
-        st.subheader(
-            "📝 S9 Work Order Details"
-        )
-
+        # S9 WORK ORDER DETAILS
         # =================================================
-        # EXTRACT SWO DETAILS
-        # =================================================
-        def extract_s9_detail(issue_text):
+        if "Issues" in user_df.columns:
 
-            text = str(issue_text).strip()
+            s9_df = user_df[
+                user_df["Project"]
+                .astype(str)
+                .str.lower()
+                .str.contains(
+                    "s9 - work order",
+                    na=False
+                )
+            ].copy()
 
-            # extract SWO type
-            swo_match = re.search(
-                r"(SWO-\d+)",
-                text,
-                re.IGNORECASE
-            )
+            if not s9_df.empty:
 
-            if swo_match:
-                swo_type = swo_match.group(1).upper()
-            else:
-                swo_type = "Other"
+                st.subheader(
+                    "📝 S9 Work Order Details"
+                )
 
-            # remove SWO code
-            description = re.sub(
-                r"SWO-\d+",
-                "",
-                text,
-                flags=re.IGNORECASE
-            )
+                # =============================================
+                # EXTRACT SWO DETAILS
+                # =============================================
+                def extract_s9_detail(issue_text):
 
-            description = (
-                description
-                .replace(":", "")
-                .strip()
-            )
+                    text = str(issue_text).strip()
 
-            if description == "":
-                description = "Other"
+                    swo_match = re.search(
+                        r"(SWO-\d+)",
+                        text,
+                        re.IGNORECASE
+                    )
 
-            return pd.Series([
-                swo_type,
-                description
-            ])
+                    if swo_match:
+                        swo_type = swo_match.group(1).upper()
+                    else:
+                        swo_type = "Other"
 
-        # =================================================
-        # CREATE DETAIL COLUMNS
-        # =================================================
-        s9_df[
-            ["SWO Type", "Description"]
-        ] = s9_df["Issues"].apply(
-            extract_s9_detail
-        )
+                    description = re.sub(
+                        r"SWO-\d+",
+                        "",
+                        text,
+                        flags=re.IGNORECASE
+                    )
 
-        # =================================================
-        # SUMMARY HOURS
-        # =================================================
-        detail_summary = (
-            s9_df
-            .groupby(
-                ["SWO Type", "Description"]
-            )["Hours"]
-            .sum()
-            .reset_index()
-        )
+                    description = (
+                        description
+                        .replace(":", "")
+                        .strip()
+                    )
 
-        # =================================================
-        # CALCULATE %
-        # inside each SWO type
-        # =================================================
-        detail_summary["Type Total"] = (
-            detail_summary
-            .groupby("SWO Type")["Hours"]
-            .transform("sum")
-        )
+                    if description == "":
+                        description = "Other"
 
-        detail_summary["Percentage"] = (
-            detail_summary["Hours"]
-            / detail_summary["Type Total"]
-            * 100
-        ).round(0)
+                    return pd.Series([
+                        swo_type,
+                        description
+                    ])
 
-        # =================================================
-        # SORT
-        # =================================================
-        detail_summary = detail_summary.sort_values(
-            by=["SWO Type", "Hours"],
-            ascending=[True, False]
-        )
+                # =============================================
+                # CREATE DETAIL COLUMNS
+                # =============================================
+                s9_df[
+                    ["SWO Type", "Description"]
+                ] = s9_df["Issues"].apply(
+                    extract_s9_detail
+                )
 
-        # =================================================
-        # DISPLAY
-        # =================================================
-        st.dataframe(
-            detail_summary[
-                [
-                    "SWO Type",
-                    "Description",
-                    "Hours",
-                    "Percentage"
-                ]
-            ],
-            hide_index=True,
-            use_container_width=True
-        )
+                # =============================================
+                # SUMMARY
+                # =============================================
+                detail_summary = (
+                    s9_df
+                    .groupby(
+                        ["SWO Type", "Description"]
+                    )["Hours"]
+                    .sum()
+                    .reset_index()
+                )
+
+                # =============================================
+                # TYPE TOTAL
+                # =============================================
+                detail_summary["Type Total"] = (
+                    detail_summary
+                    .groupby("SWO Type")["Hours"]
+                    .transform("sum")
+                )
+
+                # =============================================
+                # PERCENTAGE
+                # =============================================
+                detail_summary["Percentage"] = (
+                    detail_summary["Hours"]
+                    / detail_summary["Type Total"]
+                    * 100
+                ).round(0)
+
+                # =============================================
+                # SORT
+                # =============================================
+                detail_summary = detail_summary.sort_values(
+                    by=["SWO Type", "Hours"],
+                    ascending=[True, False]
+                )
+
+                # =============================================
+                # DISPLAY
+                # =============================================
+                st.dataframe(
+                    detail_summary[
+                        [
+                            "SWO Type",
+                            "Description",
+                            "Hours",
+                            "Percentage"
+                        ]
+                    ],
+                    hide_index=True,
+                    use_container_width=True
+                )
+
+    else:
+
+        st.warning("No valid data found")
