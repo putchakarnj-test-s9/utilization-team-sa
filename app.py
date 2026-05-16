@@ -130,6 +130,19 @@ def load_file(file):
     pipeline expects."""
     name = file.name.lower()
 
+
+  def _read_csv_with_fallback(file):
+        encodings = ["utf-8", "utf-8-sig", "cp874", "tis-620"]
+        for enc in encodings:
+            try:
+                file.seek(0)
+                return pd.read_csv(file, encoding=enc)
+            except Exception:
+                continue
+        raise ValueError("Unable to read CSV with supported encodings")
+
+
+    
     if name.endswith(".xlsx"):
         try:
             xls = pd.ExcelFile(file)
@@ -463,17 +476,21 @@ if uploaded_file:
                     if total_logged > 0 else 0
                 )
 
-                # --- Red gradient shades for S9 issues (largest = deepest) ---
-                n_issues = len(issue_summary)
+# --- Blue gradient shades for S9 issues (largest = deepest) ---
+n_issues = len(issue_summary)
 
-                def _issue_shade(i, n):
-                    if n <= 1:
-                        return "#b91c1c"
-                    ratio = i / (n - 1)            # 0 (largest) .. 1 (smallest)
-                    r = int(185 + (252 - 185) * ratio)
-                    g = int(28 + (165 - 28) * ratio)
-                    b = int(28 + (165 - 28) * ratio)
-                    return f"#{r:02x}{g:02x}{b:02x}"
+def _issue_shade(i, n):
+    if n <= 1:
+        return "#1e3a8a"  # deep blue
+
+    ratio = i / (n - 1)  # 0 (largest) .. 1 (smallest)
+
+    # interpolate from deep blue -> light blue
+    r = int(30 + (191 - 30) * ratio)   # low → higher
+    g = int(58 + (219 - 58) * ratio)   # medium → higher
+    b = int(138 + (254 - 138) * ratio) # already high → very light
+
+    return f"#{r:02x}{g:02x}{b:02x}"
 
                 issue_colors = [
                     _issue_shade(i, n_issues) for i in range(n_issues)
