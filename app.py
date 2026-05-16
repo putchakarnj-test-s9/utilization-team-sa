@@ -6,7 +6,7 @@ from matplotlib.patches import Patch
 from datetime import datetime
 
 # ---------- PAGE CONFIG ----------
-st.set_page_config(page_title="🖥 Team Utilization Dashboard", layout="wide")
+st.set_page_config(page_title="🖥 SA Team Utilization Dashboard", layout="wide")
 
 # ---------- CATEGORY CONFIG ----------
 # Each issue is classified by checking its title against these keyword rules,
