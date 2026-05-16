@@ -125,15 +125,61 @@ def transform(df):
     df["User"] = df["User"].ffill()
     df["Project"] = df["Project"].ffill()
 
-    has_issues = "Issues" in df.columns
+    # ----- Flexible "Issues" column detection -----
+    # Different Jira / Tempo exports name this column differently:
+    #   "Issues", "Issue", "Issue Summary", "Summary", or split into
+    #   "Issue Key" + "Issue Summary". Match case-insensitively, combine
+    #   key + summary into "KEY: Summary" when both are present.
+    cols_lower = {c.lower(): c for c in df.columns}
+
+    def _find(names):
+        for n in names:
+            if n.lower() in cols_lower:
+                return cols_lower[n.lower()]
+        return None
+
+    issue_name_col = _find(
+        ["Issues", "Issue", "Issue Summary", "Summary", "Worklog Description"]
+    )
+    issue_key_col = _find(["Issue Key", "Key", "Issue ID"])
+    issues_source = None
+
+    if issue_name_col and issue_key_col and issue_name_col != issue_key_col:
+        keys = df[issue_key_col].fillna("").astype(str).str.strip()
+        names = df[issue_name_col].fillna("").astype(str).str.strip()
+        combined = []
+        for k, n in zip(keys, names):
+            if k and n:
+                # Avoid double "KEY: KEY: ..." if name already starts with key
+                if n.startswith(f"{k}:") or n.startswith(f"{k} "):
+                    combined.append(n)
+                else:
+                    combined.append(f"{k}: {n}")
+            elif k:
+                combined.append(k)
+            else:
+                combined.append(n)
+        df["Issues"] = combined
+        issues_source = f"{issue_key_col} + {issue_name_col}"
+    elif issue_name_col:
+        df["Issues"] = df[issue_name_col].astype(str).str.strip()
+        issues_source = issue_name_col
+    elif issue_key_col:
+        df["Issues"] = df[issue_key_col].astype(str).str.strip()
+        issues_source = issue_key_col
+
+    has_issues = issues_source is not None
     if has_issues:
-        df["Issues"] = df["Issues"].astype(str).str.strip()
         # Empty / placeholder values -> friendly label, so project-level
         # entries (no issue attached) still appear in the breakdown.
         df["Issues"] = df["Issues"].replace(
             {"": "(no issue)", "nan": "(no issue)",
              "None": "(no issue)", "<NA>": "(no issue)"}
         )
+        # Stash for the UI to display in a caption
+        df.attrs["issues_source_column"] = issues_source
+    else:
+        df.attrs["all_columns"] = list(df.columns)
 
     # Exclude subtotal / grand-total / summary rows
     df = df[df["Project"].astype(str).str.strip().str.lower() != "total"]
@@ -212,6 +258,24 @@ if uploaded_file:
     if df is not None:
 
         has_issues = "Issues" in df.columns and "Category" in df.columns
+
+        # ---------- COLUMN-DETECTION FEEDBACK ----------
+        # Tell the user which column was read as the issue name (or warn
+        # if none was found, so they can rename their export).
+        if has_issues:
+            src = df.attrs.get("issues_source_column", "Issues")
+            if src.lower() != "issues":
+                st.caption(
+                    f"📎 Reading issue names from column **{src}**."
+                )
+        else:
+            all_cols = df.attrs.get("all_columns", list(df.columns))
+            st.warning(
+                "⚠️ No issue-name column detected. The S9 - Work Order "
+                "drill-down needs one of: **Issues**, **Issue**, "
+                "**Issue Summary**, **Issue Key**, or **Summary**. "
+                f"Columns in your file: {', '.join(all_cols)}"
+            )
 
         # ---------- USER SELECT ----------
         users = sorted(df["User"].unique())
