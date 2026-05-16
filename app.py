@@ -141,7 +141,17 @@ def load_file(file):
                 continue
         raise ValueError("Unable to read CSV with supported encodings")
 
-
+    def normalize_columns(df):
+        col_map = {
+            "ผู้ใช้": "User",
+            "ชื่อผู้ใช้": "User",
+            "โครงการ": "Project",
+            "โปรเจค": "Project",
+            "ชั่วโมงรวม": "Total",
+            "จำนวนชั่วโมง": "Total",
+            "รายละเอียด": "Description",
+        }
+        return df.rename(columns={c: col_map[c] for c in df.columns if c in col_map})
     
     if name.endswith(".xlsx"):
         try:
