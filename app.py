@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from datetime import datetime
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 
-plt.rcParams["font.family"] = "Tahoma"
-
+plt.rcParams["font.family"] = ["Tahoma", "Noto Sans Thai", "Arial Unicode MS"]
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="🖥 Team Utilization Dashboard", layout="wide")
@@ -497,7 +497,7 @@ if uploaded_file:
                     figsize=(13, max(2.6, 0.7 * n_issues))
                 )
                 bars = ax_iss.barh(
-                    plot_df[issues_label],
+                    plot_df["Issues"],
                     plot_df["% of Total"],
                     color=plot_colors,
                 )
