@@ -526,7 +526,7 @@ if uploaded_file:
 
                 # --- Detail table ---
                 detail = issue_summary[
-                    ["S9 Topics", "Logged", "Hours", "% of S9", "% of Total"]
+                    ["Issues", "Logged", "Hours", "% of S9", "% of Total"]
                 ].copy()
                 detail["Hours"] = detail["Hours"].round(2)
                 detail = detail.rename(columns={"Issues": issues_label})
