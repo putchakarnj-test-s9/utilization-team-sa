@@ -129,18 +129,6 @@ def load_file(file):
     per-issue rows. Map its columns to the standard names the rest of the
     pipeline expects."""
     name = file.name.lower()
-
-    def _read_csv_with_fallback(file):
-        encodings = ["utf-8", "utf-8-sig", "cp874", "tis-620"]
-
-        for enc in encodings:
-            try:
-                file.seek(0)  # VERY IMPORTANT
-                return pd.read_csv(file, encoding=enc)
-            except Exception:
-                continue
-
-        raise ValueError("Unable to read CSV with supported encodings")
     
     if name.endswith(".xlsx"):
         try:
@@ -504,7 +492,7 @@ if uploaded_file:
                     figsize=(13, max(2.6, 0.7 * n_issues))
                 )
                 bars = ax_iss.barh(
-                    plot_df["Issues"],
+                    plot_df["Issues"] = plot_df["Issues"].apply(clean_text_safe),
                     plot_df["% of Total"],
                     color=plot_colors,
                 )
@@ -516,8 +504,8 @@ if uploaded_file:
                     ax_iss.text(
                         bar.get_width() + max_pct * 0.01,
                         bar.get_y() + bar.get_height() / 2,
-                        f"{pct_total:.1f}% of total  ·  "
-                        f"{pct_s9:.1f}% of S9  ·  "
+                        f"{pct_total:.1f}% of all project logs  ·  "
+                        f"{pct_s9:.1f}% of S9 Work Order  ·  "
                         f"{hours_to_jira_format(h)}",
                         va="center", fontsize=9,
                     )
