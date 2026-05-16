@@ -124,37 +124,60 @@ def hours_to_jira_format(hours):
 
 # ---------- FILE READER ----------
 def load_file(file):
+    """Read the uploaded file. For .xlsx with both 'Data' and 'Details'
+    sheets (Tempo timesheet format), prefer 'Details' because it has the
+    per-issue rows. Map its columns to the standard names the rest of the
+    pipeline expects."""
     name = file.name.lower()
 
     def _read_csv_with_fallback(file):
         encodings = ["utf-8", "utf-8-sig", "cp874", "tis-620"]
+
         for enc in encodings:
             try:
-                file.seek(0)
+                file.seek(0)  # VERY IMPORTANT
                 return pd.read_csv(file, encoding=enc)
             except Exception:
                 continue
+
         raise ValueError("Unable to read CSV with supported encodings")
-
+    
     if name.endswith(".xlsx"):
-        xls = pd.ExcelFile(file)
-        sheet_map = {s.lower(): s for s in xls.sheet_names}
-
-        if "details" in sheet_map:
-            df = pd.read_excel(xls, sheet_name=sheet_map["details"])
-            df = normalize_columns(df)
-            return df
-
-        df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
-        return normalize_columns(df)
-
+        try:
+            xls = pd.ExcelFile(file)
+            sheet_map = {s.lower(): s for s in xls.sheet_names}
+ 
+            if "details" in sheet_map:
+                df = pd.read_excel(xls, sheet_name=sheet_map["details"])
+ 
+                # Normalize key columns the downstream code expects
+                cols_ci = {c.lower(): c for c in df.columns}
+                rename = {}
+                if "time spent (hours)" in cols_ci:
+                    rename[cols_ci["time spent (hours)"]] = "Total"
+                df = df.rename(columns=rename)
+ 
+                # The Details sheet can have 200+ columns; trim to what we
+                # actually use so the column picker stays manageable.
+                wanted = [
+                    "User", "Project", "Total",
+                    "Issue key", "Issue Key",
+                    "Issue summary", "Issue Summary",
+                    "Issues", "Issue", "Summary",
+                    "Worklog Description", "Description",
+                ]
+                keep = [c for c in wanted if c in df.columns]
+                if {"User", "Project", "Total"}.issubset(set(keep)):
+                    df = df[keep]
+                return df
+ 
+            return pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+        except Exception:
+            return pd.read_excel(file)
     elif name.endswith(".csv"):
-        df = _read_csv_with_fallback(file)
-        return normalize_columns(df)
-
+        return pd.read_csv(file)
     else:
-        df = _read_csv_with_fallback(file)
-        return normalize_columns(df)
+        return pd.read_csv(file, sep="\t")
 
 
 # ---------- TRANSFORM ----------
