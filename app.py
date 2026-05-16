@@ -4,6 +4,8 @@ import re
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from datetime import datetime
+import matplotlib.pyplot as pls
+
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="🖥 Team Utilization Dashboard", layout="wide")
@@ -274,7 +276,7 @@ def get_color(project):
 def stacked_100_bar(segments, colors, figsize=(12, 1.9), min_label_pct=5):
     """segments: list of (label, hours). Draws one horizontal bar = 100%."""
     total = sum(h for _, h in segments)
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize), pls.rcParams["font.family"] = "Tahoma"
 
     left = 0
     for (label, hours), color in zip(segments, colors):
@@ -492,7 +494,7 @@ if uploaded_file:
                     figsize=(13, max(2.6, 0.7 * n_issues))
                 )
                 bars = ax_iss.barh(
-                    plot_df["Issues"] = plot_df["Issues"].apply(clean_text_safe),
+                    plot_df["Issues"],
                     plot_df["% of Total"],
                     color=plot_colors,
                 )
