@@ -21,8 +21,9 @@ CATEGORY_RULES = [
     ("ลา", "Leave"),                        # Thai: leave
     ("leave", "Leave"),                     # e.g. "Leave (ลาพักร้อน/ลาทุกชนิด)"
     ("training", "Internal Meeting"),       # e.g. "Training / Meeting / กิจกรรมบริษัท"
-    ("meeting", "Internal Meeting"),        # any other meeting -> internal
-    ("กิจกรรม", "Internal Meeting"),         # Thai: company activity
+    ("meeting", "Meeting"),        # any other meeting -> internal
+    ("กิจกรรม", "Company Activities"),         # Thai: company activity
+    ("Training / Meeting / กิจกรรมบริษัท", "Training, Meetings, and Company Activities"),         # Thai: company activity
 ]
 DEFAULT_CATEGORY = "Task"
 
