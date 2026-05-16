@@ -79,6 +79,26 @@ def parse_time_to_hours(time_str):
     return total_hours
 
 
+def hours_to_jira_format(hours):
+    """Inverse of parse_time_to_hours: 50 -> '1w 1d 2h', 29 -> '3d 5h'."""
+    if hours is None or pd.isna(hours) or hours <= 0:
+        return "0h"
+    minutes_total = int(round(float(hours) * 60))
+    weeks, rem = divmod(minutes_total, 40 * 60)
+    days, rem = divmod(rem, 8 * 60)
+    hrs, mins = divmod(rem, 60)
+    parts = []
+    if weeks:
+        parts.append(f"{weeks}w")
+    if days:
+        parts.append(f"{days}d")
+    if hrs:
+        parts.append(f"{hrs}h")
+    if mins:
+        parts.append(f"{mins}m")
+    return " ".join(parts) if parts else "0h"
+
+
 # ---------- FILE READER ----------
 def load_file(file):
     name = file.name.lower()
@@ -108,13 +128,18 @@ def transform(df):
     has_issues = "Issues" in df.columns
     if has_issues:
         df["Issues"] = df["Issues"].astype(str).str.strip()
+        # Empty / placeholder values -> friendly label, so project-level
+        # entries (no issue attached) still appear in the breakdown.
+        df["Issues"] = df["Issues"].replace(
+            {"": "(no issue)", "nan": "(no issue)",
+             "None": "(no issue)", "<NA>": "(no issue)"}
+        )
 
     # Exclude subtotal / grand-total / summary rows
     df = df[df["Project"].astype(str).str.strip().str.lower() != "total"]
     df = df[df["User"].astype(str).str.strip().str.lower() != "summary"]
     if has_issues:
         df = df[df["Issues"].str.lower() != "total"]
-        df = df[df["Issues"].str.lower() != "nan"]
 
     # Keep only rows that actually have logged time
     df = df[df["Total"].notna()]
@@ -228,8 +253,8 @@ if uploaded_file:
         st.pyplot(fig)
 
         # ---------- S9 - WORK ORDER FOCUSED DRILL-DOWN ----------
-        # Other projects intentionally show only the project-level totals above.
-        # The per-issue drill-down is reserved for S9 - Work Order.
+        # Other projects intentionally show only the project-level totals
+        # above. The per-issue drill-down is reserved for S9 - Work Order.
         if has_issues:
             s9_mask = user_df["Project"].str.lower().str.contains("s9 - work order")
             s9_df = user_df[s9_mask]
@@ -240,92 +265,80 @@ if uploaded_file:
 
                 st.subheader(f"🔍 {s9_project_name} — Detailed Breakdown")
                 st.caption(
-                    f"Total {s9_total:.2f} h "
-                    f"({s9_total / total_logged * 100:.1f}% of "
+                    f"Total {hours_to_jira_format(s9_total)} "
+                    f"({s9_total:.2f} h, "
+                    f"{s9_total / total_logged * 100:.1f}% of "
                     f"{selected_user}'s logged time)"
                 )
 
-                cat_legend = [
-                    Patch(facecolor=CATEGORY_COLORS[c], label=c)
-                    for c in ["Task", "Internal Meeting", "External Meeting", "Leave"]
-                ]
-
-                # --- 100% stacked bar by category within S9 - Work Order ---
-                cat_summary = (
-                    s9_df.groupby("Category")["Hours"]
-                    .sum()
-                    .reset_index()
-                    .sort_values(by="Hours", ascending=False)
-                )
-                cat_segments = list(
-                    zip(cat_summary["Category"], cat_summary["Hours"])
-                )
-                cat_colors = [
-                    CATEGORY_COLORS.get(c, "#999999") for c, _ in cat_segments
-                ]
-                fig_cat = stacked_100_bar(
-                    cat_segments, cat_colors, figsize=(12, 1.6)
-                )
-                fig_cat.axes[0].legend(
-                    handles=cat_legend, loc="upper center",
-                    bbox_to_anchor=(0.5, -0.55), ncol=4, frameon=False,
-                    fontsize=8,
-                )
-                st.pyplot(fig_cat)
-
-                # --- horizontal bar chart: each issue by total hours ---
+                # --- Aggregate by issue: one row per unique issue ---
                 issue_summary = (
-                    s9_df.groupby(["Issues", "Category"])["Hours"]
+                    s9_df.groupby("Issues", as_index=False)["Hours"]
                     .sum()
-                    .reset_index()
-                    .sort_values(by="Hours", ascending=True)  # smallest at bottom
+                    .sort_values("Hours", ascending=False)
                 )
-                bar_colors = [
-                    CATEGORY_COLORS.get(c, "#999999")
-                    for c in issue_summary["Category"]
-                ]
+                issue_summary["% of S9"] = (
+                    issue_summary["Hours"] / s9_total * 100
+                ).round(1) if s9_total > 0 else 0
+                issue_summary["Logged"] = issue_summary["Hours"].apply(
+                    hours_to_jira_format
+                )
+
+                # --- horizontal bar chart: each issue, share of S9 ---
+                plot_df = issue_summary.sort_values("Hours", ascending=True)
+                # Color gradient: largest share darkest red, smallest lightest
+                n = len(plot_df)
+                if n > 0:
+                    # Map % -> shade: 100% -> deep red, smaller -> lighter
+                    pcts = plot_df["% of S9"].to_numpy()
+                    max_pct = pcts.max() if pcts.max() > 0 else 1
+                    shades = []
+                    for p in pcts:
+                        # Light pink -> deep red based on share
+                        ratio = p / max_pct
+                        r = int(239 - (239 - 185) * (1 - ratio))   # 185..239
+                        g = int(68 + (200 - 68) * (1 - ratio))     # 68..200
+                        b = int(68 + (200 - 68) * (1 - ratio))     # 68..200
+                        shades.append(f"#{r:02x}{g:02x}{b:02x}")
+                else:
+                    shades = []
+
                 fig_iss, ax_iss = plt.subplots(
-                    figsize=(12, max(2.5, 0.5 * len(issue_summary)))
+                    figsize=(12, max(2.5, 0.6 * max(n, 1)))
                 )
                 bars = ax_iss.barh(
-                    issue_summary["Issues"],
-                    issue_summary["Hours"],
-                    color=bar_colors,
+                    plot_df["Issues"], plot_df["Hours"], color=shades,
                 )
-                max_hours = issue_summary["Hours"].max() if len(issue_summary) else 1
-                for bar, h in zip(bars, issue_summary["Hours"]):
-                    pct = h / s9_total * 100 if s9_total > 0 else 0
+                max_hours = plot_df["Hours"].max() if n else 1
+                for bar, h, pct in zip(
+                    bars, plot_df["Hours"], plot_df["% of S9"]
+                ):
                     ax_iss.text(
                         bar.get_width() + max_hours * 0.01,
                         bar.get_y() + bar.get_height() / 2,
-                        f"{h:.1f} h  ({pct:.1f}%)",
-                        va="center", fontsize=9,
+                        f"{hours_to_jira_format(h)}  ·  {pct:.1f}%",
+                        va="center", fontsize=10,
                     )
-                ax_iss.set_xlim(0, max_hours * 1.18)
+                ax_iss.set_xlim(0, max_hours * 1.30)
                 ax_iss.set_xlabel("Hours")
-                ax_iss.set_title("Issues in S9 - Work Order, by total hours")
+                ax_iss.set_title(
+                    "Issues in S9 - Work Order — share of S9 total"
+                )
                 for spine in ["top", "right"]:
                     ax_iss.spines[spine].set_visible(False)
-                ax_iss.legend(
-                    handles=cat_legend, loc="lower right",
-                    fontsize=8, frameon=False,
-                )
                 fig_iss.tight_layout()
                 st.pyplot(fig_iss)
 
-                # --- detail table: every issue in S9 - Work Order ---
-                detail = s9_df[["Issues", "Category", "Total", "Hours"]].copy()
-                detail["% of S9"] = (
-                    detail["Hours"] / s9_total * 100
-                ).round(1) if s9_total > 0 else 0
-                detail = detail.sort_values(by="Hours", ascending=False)
-                detail = detail.rename(columns={"Total": "Logged"})
+                # --- detail table: Issue / Logged / Hours / % of S9 ---
+                detail = issue_summary[
+                    ["Issues", "Logged", "Hours", "% of S9"]
+                ].copy()
+                detail["Hours"] = detail["Hours"].round(2)
 
                 total_row = pd.DataFrame({
                     "Issues": ["TOTAL"],
-                    "Category": [""],
-                    "Logged": [""],
-                    "Hours": [s9_total],
+                    "Logged": [hours_to_jira_format(s9_total)],
+                    "Hours": [round(s9_total, 2)],
                     "% of S9": [100.0],
                 })
                 detail = pd.concat([detail, total_row], ignore_index=True)
@@ -333,6 +346,15 @@ if uploaded_file:
                 st.dataframe(
                     detail, hide_index=True, use_container_width=True
                 )
+
+                # Friendly hint if the export didn't include any issue names
+                if (issue_summary["Issues"] == "(no issue)").any():
+                    st.caption(
+                        "⚠️ Some S9 - Work Order entries have no issue name "
+                        "in the export and are grouped as **(no issue)**. "
+                        "If you expected issue codes here, check that the "
+                        "Tempo export includes the **Issues** column."
+                    )
             else:
                 st.info(
                     "ℹ️ No **S9 - Work Order** entries found for this user."
