@@ -458,15 +458,14 @@ def _issue_shade(i, n):
     if n <= 1:
         return "#1e3a8a"  # deep blue
 
-    ratio = i / (n - 1)  # 0 (largest) .. 1 (smallest)
+    ratio = i/(n - 1)  # 0 (largest) .. 1 (smallest)
 
     # interpolate from deep blue -> light blue
     r = int(30 + (191 - 30) * ratio)   # low → higher
     g = int(58 + (219 - 58) * ratio)   # medium → higher
     b = int(138 + (254 - 138) * ratio) # already high → very light
-
     return f"#{r:02x}{g:02x}{b:02x}"
-
+    
                 issue_colors = [
                     _issue_shade(i, n_issues) for i in range(n_issues)
                 ]
