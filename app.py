@@ -451,25 +451,22 @@ if uploaded_file:
                     if total_logged > 0 else 0
                 )
 
-# --- Blue gradient shades for S9 issues (largest = deepest) ---
-n_issues = len(issue_summary)
-
-def _issue_shade(i, n):
-    if n <= 1:
-        return "#1e3a8a"  # deep blue
-
-    ratio = i/(n - 1)  # 0 (largest) .. 1 (smallest)
-
-    # interpolate from deep blue -> light blue
-    r = int(30 + (191 - 30) * ratio)   # low → higher
-    g = int(58 + (219 - 58) * ratio)   # medium → higher
-    b = int(138 + (254 - 138) * ratio) # already high → very light
-    return f"#{r:02x}{g:02x}{b:02x}"
-    
+          # --- Red gradient shades for S9 issues (largest = deepest) ---
+                n_issues = len(issue_summary)
+ 
+                def _issue_shade(i, n):
+                    if n <= 1:
+                        return "#b91c1c"
+                    ratio = i / (n - 1)            # 0 (largest) .. 1 (smallest)
+                    r = int(185 + (252 - 185) * ratio)
+                    g = int(28 + (165 - 28) * ratio)
+                    b = int(28 + (165 - 28) * ratio)
+                    return f"#{r:02x}{g:02x}{b:02x}"
+ 
                 issue_colors = [
                     _issue_shade(i, n_issues) for i in range(n_issues)
                 ]
-
+ 
                 # --- Per-issue horizontal bar chart (% of total) ---
                 plot_df = issue_summary.sort_values("Hours", ascending=True)
                 plot_colors = [
@@ -510,6 +507,7 @@ def _issue_shade(i, n):
                     ax_iss.spines[spine].set_visible(False)
                 fig_iss.tight_layout()
                 st.pyplot(fig_iss)
+ 
 
                 # --- Detail table ---
                 detail = issue_summary[
