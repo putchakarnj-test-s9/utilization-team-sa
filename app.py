@@ -327,6 +327,14 @@ if uploaded_file:
                 s9_project_name = s9_df["Project"].iloc[0]
                 s9_total = s9_df["Hours"].sum()
 
+                # Use the original column name from the user's Excel as the
+                # display label (e.g. "Issue", "Issue Summary"). When the
+                # source was split Key+Summary, fall back to a clean label.
+                issues_source = df.attrs.get("issues_source_column", "Issues")
+                issues_label = (
+                    "Issue" if "+" in issues_source else issues_source
+                )
+
                 st.subheader(f"🔍 {s9_project_name} — Detailed Breakdown")
                 st.caption(
                     f"Total {hours_to_jira_format(s9_total)} "
@@ -386,21 +394,23 @@ if uploaded_file:
                 ax_iss.set_xlim(0, max_hours * 1.30)
                 ax_iss.set_xlabel("Hours")
                 ax_iss.set_title(
-                    "Issues in S9 - Work Order — share of S9 total"
+                    f"{issues_label}s in {s9_project_name} — "
+                    "share of S9 total"
                 )
                 for spine in ["top", "right"]:
                     ax_iss.spines[spine].set_visible(False)
                 fig_iss.tight_layout()
                 st.pyplot(fig_iss)
 
-                # --- detail table: Issue / Logged / Hours / % of S9 ---
+                # --- detail table: <issues_label> / Logged / Hours / % of S9 ---
                 detail = issue_summary[
                     ["Issues", "Logged", "Hours", "% of S9"]
                 ].copy()
                 detail["Hours"] = detail["Hours"].round(2)
+                detail = detail.rename(columns={"Issues": issues_label})
 
                 total_row = pd.DataFrame({
-                    "Issues": ["TOTAL"],
+                    issues_label: ["TOTAL"],
                     "Logged": [hours_to_jira_format(s9_total)],
                     "Hours": [round(s9_total, 2)],
                     "% of S9": [100.0],
