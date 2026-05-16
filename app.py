@@ -128,7 +128,7 @@ def load_file(file):
     sheets (Tempo timesheet format), prefer 'Details' because it has the
     per-issue rows. Map its columns to the standard names the rest of the
     pipeline expects."""
-    name = file.name.lower()
+    name = file.name.lower():
 
 
   def _read_csv_with_fallback(file):
