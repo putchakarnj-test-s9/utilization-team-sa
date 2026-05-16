@@ -18,11 +18,12 @@ st.set_page_config(page_title="🖥 Team Utilization Dashboard", layout="wide")
 CATEGORY_RULES = [
     ("external", "External Meeting"),       # e.g. "External Client Activity"
     ("internal meeting", "Internal Meeting"),  # e.g. "Internal Meeting"
-    ("ลา", "Leave"),                        # Thai: leave
+    ("ลาพักร้อน", "Leave"),                        # Thai: leave
+    ("ลาทุกชนิด", "Holiday"),                        # Thai: leave
     ("leave", "Leave"),                     # e.g. "Leave (ลาพักร้อน/ลาทุกชนิด)"
-    ("training", "Internal Meeting"),       # e.g. "Training / Meeting / กิจกรรมบริษัท"
+    ("training", "Training"),       # e.g. "Training / Meeting / กิจกรรมบริษัท"
     ("meeting", "Meeting"),        # any other meeting -> internal
-    ("กิจกรรม", "Company Activities"),         # Thai: company activity
+    ("กิจกรรมบริษัท", "Company Activities"),         # Thai: company activity
     ("R & D", "R & D"),         # Thai: company activity
 ]
 DEFAULT_CATEGORY = "Task"
@@ -497,7 +498,7 @@ if uploaded_file:
                     figsize=(13, max(2.6, 0.7 * n_issues))
                 )
                 bars = ax_iss.barh(
-                    plot_df["Issues"],
+                    plot_df["Issues"].apply(categorize_issue),
                     plot_df["% of Total"],
                     color=plot_colors,
                 )
