@@ -9,13 +9,6 @@ import matplotlib.font_manager as fm
 
 plt.rcParams["font.family"] = ["Tahoma", "Noto Sans Thai", "Arial Unicode MS"]
 
-import chardet
-
-def detect_encoding(file):
-    raw = file.read(10000)
-    file.seek(0)
-    result = chardet.detect(raw)
-    return result["encoding"]
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="🖥 Team Utilization Dashboard", layout="wide")
