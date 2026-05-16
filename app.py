@@ -23,7 +23,7 @@ CATEGORY_RULES = [
     ("training", "Internal Meeting"),       # e.g. "Training / Meeting / กิจกรรมบริษัท"
     ("meeting", "Meeting"),        # any other meeting -> internal
     ("กิจกรรม", "Company Activities"),         # Thai: company activity
-    ("Training / Meeting / กิจกรรมบริษัท", "Training, Meetings, and Company Activities"),         # Thai: company activity
+    ("R & D", "R & D"),         # Thai: company activity
 ]
 DEFAULT_CATEGORY = "Task"
 
