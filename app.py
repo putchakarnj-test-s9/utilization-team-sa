@@ -497,7 +497,7 @@ if uploaded_file:
                     figsize=(13, max(2.6, 0.7 * n_issues))
                 )
                 bars = ax_iss.barh(
-                    plot_df[detail.rename(columns={"Issues": issues_label})],
+                    plot_df[issues_label],
                     plot_df["% of Total"],
                     color=plot_colors,
                 )
