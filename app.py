@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
 plt.rcParams["font.family"] = ["Tahoma", "Noto Sans Thai", "Arial Unicode MS"]
+def set_thai_font():
+    import matplotlib.pyplot as plt
+    plt.rcParams["font.family"] = ["Noto Sans Thai", "Tahoma"]
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="🖥 Team Utilization Dashboard", layout="wide")
@@ -497,14 +500,8 @@ if uploaded_file:
                 fig_iss, ax_iss = plt.subplots(
                     figsize=(13, max(2.6, 0.7 * n_issues))
                 )
-                
-                detail = issue_summary[
-                    ["Issues", "Logged", "Hours", "% of S9", "% of Total"]
-
-                detail = detail.rename(columns={"Issues": issues_label})
-
                 bars = ax_iss.barh(
-                    plot_df[detail],
+                    plot_df["Issues"],
                     plot_df["% of Total"],
                     color=plot_colors,
                 )
