@@ -4,14 +4,9 @@ import re
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from datetime import datetime
-import matplotlib.pyplot as pls
-import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
 
-# Load custom font file (you must upload .ttf to your project)
-font_path = "NotoSansThai-Regular.ttf"
-fm.fontManager.addfont(font_path)
-
-plt.rcParams["font.family"] = "Noto Sans Thai"
+plt.rcParams["font.family"] = "Tahoma"
 
 
 # ---------- PAGE CONFIG ----------
