@@ -5,6 +5,13 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from datetime import datetime
 import matplotlib.pyplot as pls
+import matplotlib.font_manager as fm
+
+# Load custom font file (you must upload .ttf to your project)
+font_path = "NotoSansThai-Regular.ttf"
+fm.fontManager.addfont(font_path)
+
+plt.rcParams["font.family"] = "Noto Sans Thai"
 
 
 # ---------- PAGE CONFIG ----------
@@ -276,7 +283,7 @@ def get_color(project):
 def stacked_100_bar(segments, colors, figsize=(12, 1.9), min_label_pct=5):
     """segments: list of (label, hours). Draws one horizontal bar = 100%."""
     total = sum(h for _, h in segments)
-    fig, ax = plt.subplots(figsize=figsize), pls.rcParams["font.family"] = "Tahoma"
+    fig, ax = plt.subplots(figsize=figsize)
 
     left = 0
     for (label, hours), color in zip(segments, colors):
