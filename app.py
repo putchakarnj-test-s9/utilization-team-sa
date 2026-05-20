@@ -1,13 +1,94 @@
 import streamlit as st
 import pandas as pd
 import re
-import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
-from datetime import datetime
+import os
+import urllib.request
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
+from matplotlib.patches import Patch
+from datetime import datetime
 
-plt.rcParams["font.family"] = ["Tahoma", "Noto Sans Thai", "Arial Unicode MS"]
+
+# ---------- THAI FONT SETUP ----------
+# Matplotlib only renders glyphs the active font actually contains. Naming a
+# font in rcParams isn't enough — it has to exist on the host. This function
+# guarantees a Thai-capable font is registered (bundled, system, or
+# auto-downloaded), so charts never show boxes for Thai characters.
+
+_THAI_CODEPOINTS = list(range(0x0E01, 0x0E5C))   # Thai Unicode block
+_MIN_THAI_GLYPHS = 30                            # threshold for "real" Thai font
+
+
+def _font_has_thai(font_path):
+    """Return True if the .ttf/.otf at font_path covers Thai."""
+    try:
+        from fontTools.ttLib import TTFont
+        tt = TTFont(font_path, fontNumber=0, lazy=True)
+        cmap = tt.getBestCmap()
+        tt.close()
+        if not cmap:
+            return False
+        return sum(1 for cp in _THAI_CODEPOINTS if cp in cmap) >= _MIN_THAI_GLYPHS
+    except Exception:
+        return False
+
+
+def setup_thai_font():
+    """Find or install a Thai-capable font. Returns the font name set, or None."""
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    # 1) Look in ./fonts/ next to app.py (drop a .ttf there to bundle a font)
+    bundled_dir = os.path.join(here, "fonts")
+    if os.path.isdir(bundled_dir):
+        for fname in sorted(os.listdir(bundled_dir)):
+            if fname.lower().endswith((".ttf", ".otf")):
+                path = os.path.join(bundled_dir, fname)
+                if _font_has_thai(path):
+                    fm.fontManager.addfont(path)
+                    name = fm.FontProperties(fname=path).get_name()
+                    plt.rcParams["font.family"] = [name]
+                    plt.rcParams["axes.unicode_minus"] = False
+                    return name
+
+    # 2) Scan installed system fonts for actual Thai glyph coverage
+    for fpath in fm.findSystemFonts():
+        if _font_has_thai(fpath):
+            fm.fontManager.addfont(fpath)
+            name = fm.FontProperties(fname=fpath).get_name()
+            plt.rcParams["font.family"] = [name]
+            plt.rcParams["axes.unicode_minus"] = False
+            return name
+
+    # 3) Last resort: download Sarabun (popular Thai font) from Google Fonts
+    cache_dir = os.path.join(here, ".thai_font_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    font_path = os.path.join(cache_dir, "Sarabun-Regular.ttf")
+
+    if not (os.path.exists(font_path) and _font_has_thai(font_path)):
+        urls = [
+            "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf",
+            "https://raw.githubusercontent.com/google/fonts/main/ofl/sarabun/Sarabun-Regular.ttf",
+            "https://github.com/google/fonts/raw/main/ofl/notosansthai/NotoSansThai-Regular.ttf",
+        ]
+        for url in urls:
+            try:
+                urllib.request.urlretrieve(url, font_path)
+                if _font_has_thai(font_path):
+                    break
+            except Exception:
+                continue
+
+    if os.path.exists(font_path) and _font_has_thai(font_path):
+        fm.fontManager.addfont(font_path)
+        name = fm.FontProperties(fname=font_path).get_name()
+        plt.rcParams["font.family"] = [name]
+        plt.rcParams["axes.unicode_minus"] = False
+        return name
+
+    return None
+
+
+_THAI_FONT_NAME = setup_thai_font()
 
 
 # ---------- PAGE CONFIG ----------
@@ -18,22 +99,22 @@ st.set_page_config(page_title="🖥 Team Utilization Dashboard", layout="wide")
 # IN ORDER (first match wins). Edit / reorder these to tune the classification.
 CATEGORY_RULES = [
     ("external", "External Meeting"),       # e.g. "External Client Activity"
-    ("internal meeting", "Internal Meeting"),  # e.g. "Internal Meeting"
-    ("ลาพักร้อน", "Leave"),                        # Thai: leave
-    ("ลาทุกชนิด", "Holiday"),                        # Thai: leave
+    ("internal meeting", "Internal Meeting"),
+    ("ลาพักร้อน", "Leave"),                   # Thai: leave
+    ("ลาทุกชนิด", "Holiday"),                  # Thai: any leave
     ("leave", "Leave"),                     # e.g. "Leave (ลาพักร้อน/ลาทุกชนิด)"
-    ("training", "Training"),       # e.g. "Training / Meeting / กิจกรรมบริษัท"
-    ("meeting", "Meeting"),        # any other meeting -> internal
-    ("กิจกรรมบริษัท", "Company Activities"),         # Thai: company activity
-    ("R & D", "R & D"),         # Thai: company activity
+    ("training", "Training"),               # e.g. "Training / Meeting / กิจกรรมบริษัท"
+    ("meeting", "Meeting"),                 # any other meeting
+    ("กิจกรรมบริษัท", "Company Activities"),    # Thai: company activity
+    ("R & D", "R & D"),
 ]
 DEFAULT_CATEGORY = "Task"
 
 CATEGORY_COLORS = {
-    "Task": "#22c55e",             # green
-    "Internal Meeting": "#3b82f6",  # blue
-    "External Meeting": "#f59e0b",  # amber
-    "Leave": "#94a3b8",            # gray
+    "Task": "#22c55e",              # green
+    "Internal Meeting": "#3b82f6",   # blue
+    "External Meeting": "#f59e0b",   # amber
+    "Leave": "#94a3b8",             # gray
 }
 
 
@@ -41,7 +122,7 @@ def categorize_issue(issue):
     """Classify a single issue title into a category."""
     s = str(issue).lower()
     for keyword, category in CATEGORY_RULES:
-        if keyword in s:
+        if keyword.lower() in s:
             return category
     return DEFAULT_CATEGORY
 
@@ -49,7 +130,6 @@ def categorize_issue(issue):
 # ---------- MONTH DISPLAY (FROM FILE NAME) ----------
 def extract_month_from_filename(filename):
     match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})_(\d{2})\.(\d{2})\.(\d{4})", filename)
-
     if match:
         day, month, year = match.group(1), match.group(2), match.group(3)
         try:
@@ -77,7 +157,6 @@ def parse_time_to_hours(time_str):
     if pd.isna(time_str):
         return 0
 
-    # Already numeric? Decimal hours.
     if isinstance(time_str, (int, float)):
         return float(time_str)
 
@@ -85,16 +164,13 @@ def parse_time_to_hours(time_str):
     if s == "":
         return 0
 
-    # Pure number string -> decimal hours
     try:
         return float(s)
     except ValueError:
         pass
 
-    # Jira / Tempo format: "1w 1d 2h 30m"
     pattern = r'(\d+)w|(\d+)d|(\d+)h|(\d+)m'
     matches = re.findall(pattern, s)
-
     total_hours = 0
     for w, d, h, m in matches:
         if w:
@@ -105,7 +181,6 @@ def parse_time_to_hours(time_str):
             total_hours += int(h)
         if m:
             total_hours += int(m) / 60
-
     return total_hours
 
 
@@ -136,24 +211,21 @@ def load_file(file):
     per-issue rows. Map its columns to the standard names the rest of the
     pipeline expects."""
     name = file.name.lower()
-    
+
     if name.endswith(".xlsx"):
         try:
             xls = pd.ExcelFile(file)
             sheet_map = {s.lower(): s for s in xls.sheet_names}
- 
+
             if "details" in sheet_map:
                 df = pd.read_excel(xls, sheet_name=sheet_map["details"])
- 
-                # Normalize key columns the downstream code expects
+
                 cols_ci = {c.lower(): c for c in df.columns}
                 rename = {}
                 if "time spent (hours)" in cols_ci:
                     rename[cols_ci["time spent (hours)"]] = "Total"
                 df = df.rename(columns=rename)
- 
-                # The Details sheet can have 200+ columns; trim to what we
-                # actually use so the column picker stays manageable.
+
                 wanted = [
                     "User", "Project", "Total",
                     "Issue key", "Issue Key",
@@ -165,7 +237,7 @@ def load_file(file):
                 if {"User", "Project", "Total"}.issubset(set(keep)):
                     df = df[keep]
                 return df
- 
+
             return pd.read_excel(xls, sheet_name=xls.sheet_names[0])
         except Exception:
             return pd.read_excel(file)
@@ -184,16 +256,9 @@ def transform(df, issues_override=None):
         st.error("❌ File must contain columns: User, Project, Total")
         return None
 
-    # Jira/Tempo exports leave merged cells blank for repeated User / Project /
-    # Issues values -> forward-fill so every task row carries its context.
     df["User"] = df["User"].ffill()
     df["Project"] = df["Project"].ffill()
 
-    # ----- Issue column: manual override wins, then auto-detect -----
-    # Auto-detect handles common Jira / Tempo names ("Issues", "Issue",
-    # "Issue Summary", "Summary", "Worklog Description", and split
-    # "Issue Key" + "Issue Summary"). The UI also lets the user pick the
-    # column explicitly, which takes priority.
     cols_lower = {c.lower(): c for c in df.columns}
 
     def _find(names):
@@ -239,24 +304,19 @@ def transform(df, issues_override=None):
 
     has_issues = issues_source is not None
     if has_issues:
-        # Empty / placeholder values -> friendly label, so project-level
-        # entries (no issue attached) still appear in the breakdown.
         df["Issues"] = df["Issues"].replace(
             {"": "(no issue)", "nan": "(no issue)",
              "None": "(no issue)", "<NA>": "(no issue)"}
         )
-        # Stash for the UI to display in a caption
         df.attrs["issues_source_column"] = issues_source
     else:
         df.attrs["all_columns"] = list(df.columns)
 
-    # Exclude subtotal / grand-total / summary rows
     df = df[df["Project"].astype(str).str.strip().str.lower() != "total"]
     df = df[df["User"].astype(str).str.strip().str.lower() != "summary"]
     if has_issues:
         df = df[df["Issues"].str.lower() != "total"]
 
-    # Keep only rows that actually have logged time
     df = df[df["Total"].notna()]
     df["Hours"] = df["Total"].apply(parse_time_to_hours)
     df = df[df["Hours"] > 0]
@@ -322,57 +382,26 @@ if uploaded_file:
         st.title("📊 Team Utilization Dashboard")
 
     df_raw = load_file(uploaded_file)
-
-    # ---------- ISSUE-NAME COLUMN PICKER ----------
-    # Auto-detect first, then let the user override with the actual column
-    # that holds issue names (in case the export uses a non-standard header).
-    raw_cols = [str(c).strip() for c in df_raw.columns]
-    cols_ci = {c.lower(): c for c in raw_cols}
-    auto_default = None
-    for cand in ["Issues", "Issue", "Issue Summary", "Summary",
-                 "Worklog Description", "Description", "Task", "Topic"]:
-        if cand.lower() in cols_ci:
-            auto_default = cols_ci[cand.lower()]
-            break
-
-    picker_options = ["(auto-detect)"] + raw_cols
-    default_idx = 0  # "(auto-detect)"
-    selected_issue_col = st.selectbox(
-        "🏷️ Which column has the issue name?  "
-        "(SWO-6: R & D, SWO-4: …, etc.)",
-        options=picker_options,
-        index=default_idx,
-        help=(
-            "If your S9 - Work Order table shows '(no issue)', the "
-            "auto-detect picked the wrong column. Pick the column that "
-            "contains the issue keys / summaries here."
-            + (f"  Auto-detect found: **{auto_default}**." if auto_default
-               else "  Auto-detect found nothing usable.")
-        ),
-    )
-    issues_override = (
-        None if selected_issue_col == "(auto-detect)" else selected_issue_col
-    )
-
-    df = transform(df_raw, issues_override=issues_override)
+    df = transform(df_raw)
 
     if df is not None:
 
         has_issues = "Issues" in df.columns and "Category" in df.columns
 
-        # ---------- COLUMN-DETECTION FEEDBACK ----------
-        if has_issues:
-            src = df.attrs.get("issues_source_column", "Issues")
-            tag = "override" if issues_override else "auto-detect"
-            st.caption(
-                f"📎 Reading issue names from column **{src}** ({tag})."
-            )
-        else:
+        if not has_issues:
             all_cols = df.attrs.get("all_columns", list(df.columns))
             st.warning(
-                "⚠️ No issue-name column was selected or detected. "
-                "Pick the right column in the dropdown above. "
+                "⚠️ No issue-name column was detected. "
                 f"Columns in your file: {', '.join(all_cols)}"
+            )
+
+        # Heads-up if no Thai font could be loaded -> Thai will render as boxes
+        if _THAI_FONT_NAME is None:
+            st.warning(
+                "⚠️ No Thai font available — Thai characters will show as "
+                "boxes in charts. Install a Thai font (Sarabun, TH Sarabun "
+                "New, Noto Sans Thai, Tahoma) or drop a `.ttf` file into a "
+                "`fonts/` folder next to `app.py`."
             )
 
         # ---------- USER SELECT ----------
@@ -408,21 +437,12 @@ if uploaded_file:
 
         # ---------- 100% STACKED BAR: ALL PROJECTS = 100% ----------
         st.subheader("📌 Project Distribution — All Projects = 100%")
-
         segments = list(zip(project_summary["Project"], project_summary["Hours"]))
         colors = [get_color(p) for p, _ in segments]
         fig = stacked_100_bar(segments, colors, figsize=(12, 2.0))
         st.pyplot(fig)
 
         # ---------- S9 - WORK ORDER FOCUSED DRILL-DOWN ----------
-        # Goal: take every row where Project == "S9 - Work Order", read each
-        # issue's name from the Issues column AS-IS (no hardcoded list),
-        # sum the hours per issue, and show how each issue's share builds
-        # up the S9 - Work Order share of the user's total time.
-        #
-        # Worked example: if S9 - Work Order = 90% of the user's total time,
-        # and SWO-6: R & D = 30% of total, SWO-4: ... = 60% of total, then
-        # 30% + 60% = 90% — i.e. issue shares of total sum to the S9 share.
         if has_issues:
             s9_mask = user_df["Project"].str.lower().str.contains(
                 "s9 - work order"
@@ -435,9 +455,7 @@ if uploaded_file:
                 s9_pct_of_total = (
                     (s9_total / total_logged * 100) if total_logged > 0 else 0
                 )
-                other_total = total_logged - s9_total
 
-                # Column label = whatever column the issue name was read from
                 issues_source = df.attrs.get("issues_source_column", "Issues")
                 issues_label = (
                     "Issue" if "+" in issues_source else issues_source
@@ -451,7 +469,6 @@ if uploaded_file:
                     f"{hours_to_jira_format(total_logged)})"
                 )
 
-                # --- Aggregate by issue (names read from the Issues column) ---
                 issue_summary = (
                     s9_df.groupby("Issues", as_index=False)["Hours"]
                     .sum()
@@ -470,23 +487,17 @@ if uploaded_file:
                     if total_logged > 0 else 0
                 )
 
-                # --- Red gradient shades for S9 issues (largest = deepest) ---
                 n_issues = len(issue_summary)
 
                 def _issue_shade(i, n):
                     if n <= 1:
                         return "#1e3a8a"
-                    ratio = i / (n - 1)            # 0 (largest) .. 1 (smallest)
+                    ratio = i / (n - 1)
                     r = int(30 + (191 - 30) * ratio)
                     g = int(58 + (219 - 58) * ratio)
                     b = int(138 + (254 - 138) * ratio)
                     return f"#{r:02x}{g:02x}{b:02x}"
 
-                issue_colors = [
-                    _issue_shade(i, n_issues) for i in range(n_issues)
-                ]
-
-                # --- Per-issue horizontal bar chart (% of total) ---
                 plot_df = issue_summary.sort_values("Hours", ascending=True)
                 plot_colors = [
                     _issue_shade(
@@ -547,14 +558,12 @@ if uploaded_file:
                     detail, hide_index=True, use_container_width=True
                 )
 
-                # Sanity check the math for the user
                 st.caption(
                     f"✅ Sum of issue *% of Total* = "
                     f"**{issue_summary['% of Total'].sum():.1f}%** "
                     f"= {s9_project_name}'s share of total time."
                 )
 
-                # Warn if any issue rows have no name in the export
                 if (issue_summary["Issues"] == "(no issue)").any():
                     st.caption(
                         "⚠️ Some S9 - Work Order rows have no issue name in "
@@ -581,7 +590,6 @@ if uploaded_file:
 
         # ---------- METRICS ----------
         st.subheader("📈 Utilization Summary")
-
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Hours (Month)", f"{total_logged:.1f} h")
         col2.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
