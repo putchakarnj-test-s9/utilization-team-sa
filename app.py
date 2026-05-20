@@ -634,27 +634,37 @@ if uploaded_file:
             )
 
         # ---------- UTILIZATION ----------
-        non_s9_work_order_hours = user_df[
-            ~user_df["Project"].str.lower().str.contains("s9 - work order")
-        ]["Hours"].sum()
+        # Split the month's time into two buckets that sum to 100%:
+        # S9 - Work Order vs every other project.
+        s9_mask_full = user_df["Project"].str.lower().str.contains(
+            "s9 - work order", na=False
+        )
+        s9_wo_hours = user_df.loc[s9_mask_full, "Hours"].sum()
+        other_hours = user_df.loc[~s9_mask_full, "Hours"].sum()
 
-        utilization = round(
-            (non_s9_work_order_hours / total_logged) * 100, 0
-        ) if total_logged > 0 else 0
+        s9_pct = (s9_wo_hours / total_logged * 100) if total_logged > 0 else 0
+        other_pct = (
+            (other_hours / total_logged * 100) if total_logged > 0 else 0
+        )
+
+        non_s9_projects = user_df.loc[~s9_mask_full, "Project"].unique()
 
         # ---------- METRICS ----------
         st.subheader("📈 Utilization Summary")
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Hours (Month)", f"{total_logged:.1f} h")
-        col2.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
-
-        non_s9_projects = user_df.loc[
-            ~user_df["Project"].str.lower().str.contains("s9 - work order"),
-            "Project",
-        ].unique()
+        col2.metric(
+            "S9 - Work Order",
+            f"{s9_pct:.1f}%",
+            help=f"{hours_to_jira_format(s9_wo_hours)} on S9 - Work Order",
+        )
         col3.metric(
-            "Projects (Excl. S9 Work Order)",
-            f"{len(non_s9_projects)}",
-            help="Count of distinct projects worked on this month, "
-                 "excluding S9 - Work Order.",
+            "Other Projects",
+            f"{other_pct:.1f}%",
+            help=(
+                f"{hours_to_jira_format(other_hours)} across "
+                f"{len(non_s9_projects)} project"
+                f"{'s' if len(non_s9_projects) != 1 else ''} "
+                f"(excluding S9 - Work Order)"
+            ),
         )
