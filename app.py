@@ -648,11 +648,13 @@ if uploaded_file:
         col1.metric("Total Hours (Month)", f"{total_logged:.1f} h")
         col2.metric("Utilization (Excl. S9 Work Order)", f"{utilization}%")
 
-        if has_issues:
-            meeting_hours = user_df[
-                user_df["Category"].isin(["Internal Meeting", "External Meeting"])
-            ]["Hours"].sum()
-            meeting_pct = round(
-                meeting_hours / total_logged * 100, 1
-            ) if total_logged > 0 else 0
-            col3.metric("Time in Meetings", f"{meeting_pct}%")
+        non_s9_projects = user_df.loc[
+            ~user_df["Project"].str.lower().str.contains("s9 - work order"),
+            "Project",
+        ].unique()
+        col3.metric(
+            "Projects (Excl. S9 Work Order)",
+            f"{len(non_s9_projects)}",
+            help="Count of distinct projects worked on this month, "
+                 "excluding S9 - Work Order.",
+        )
