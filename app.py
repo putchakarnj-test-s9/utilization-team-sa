@@ -118,6 +118,55 @@ CATEGORY_COLORS = {
 }
 
 
+# ---------- PROJECT REASSIGNMENT (FIX MISFILED ISSUES) ----------
+# Some issues get logged under "S9 - Work Order" in Tempo even though they
+# really belong to a separate project (data-entry mistake). Each rule moves
+# those rows to a target project so the project chart and S9 breakdown both
+# reflect reality. Match is case-insensitive substring on the issue name.
+S9_REASSIGN = [
+    # (keyword in Issue name, target Project name)
+    ("GGP(PH2)", "GGP - Phase 2"),
+    # add more as you find them, e.g.:
+    # ("AWC", "AWC : Pikul"),
+    # ("Win Performance", "Win Performance"),
+]
+
+
+# ---------- PROJECT COLORS ----------
+# Reserved colours for the two S9 projects; everything else cycles through
+# the palette below so each non-S9 project shows in a distinct colour.
+PROJECT_PALETTE = [
+    "#22c55e",  # green
+    "#a855f7",  # purple
+    "#f59e0b",  # amber
+    "#0ea5e9",  # sky
+    "#ec4899",  # pink
+    "#14b8a6",  # teal
+    "#84cc16",  # lime
+    "#f97316",  # orange
+    "#06b6d4",  # cyan
+    "#eab308",  # yellow
+    "#8b5cf6",  # violet
+    "#10b981",  # emerald
+]
+
+
+def get_project_colors(projects):
+    """Return one colour per project, in the same order as the input list."""
+    colors = []
+    palette_idx = 0
+    for p in projects:
+        pl = str(p).lower()
+        if "s9 - work order" in pl:
+            colors.append("#ef4444")  # red, reserved
+        elif "s9 - tech support" in pl:
+            colors.append("#3b82f6")  # blue, reserved
+        else:
+            colors.append(PROJECT_PALETTE[palette_idx % len(PROJECT_PALETTE)])
+            palette_idx += 1
+    return colors
+
+
 def categorize_issue(issue):
     """Classify a single issue title into a category."""
     s = str(issue).lower()
@@ -309,6 +358,21 @@ def transform(df, issues_override=None):
              "None": "(no issue)", "<NA>": "(no issue)"}
         )
         df.attrs["issues_source_column"] = issues_source
+
+        # Reassign misfiled S9 issues to their real project (S9_REASSIGN)
+        if S9_REASSIGN:
+            proj_lower = df["Project"].astype(str).str.lower()
+            issue_lower = df["Issues"].astype(str).str.lower()
+            for keyword, target_project in S9_REASSIGN:
+                mask = (
+                    proj_lower.str.contains("s9 - work order",
+                                            na=False, regex=False)
+                    & issue_lower.str.contains(keyword.lower(),
+                                               na=False, regex=False)
+                )
+                if mask.any():
+                    df.loc[mask, "Project"] = target_project
+                    proj_lower = df["Project"].astype(str).str.lower()
     else:
         df.attrs["all_columns"] = list(df.columns)
 
@@ -325,16 +389,6 @@ def transform(df, issues_override=None):
         df["Category"] = df["Issues"].apply(categorize_issue)
 
     return df
-
-
-# ---------- COLOR LOGIC (PROJECTS) ----------
-def get_color(project):
-    p = str(project).lower()
-    if "s9 - work order" in p:
-        return "#ef4444"  # red
-    elif "s9 - tech support" in p:
-        return "#3b82f6"  # blue
-    return "#22c55e"      # green
 
 
 # ---------- 100% STACKED BAR HELPER ----------
@@ -438,7 +492,7 @@ if uploaded_file:
         # ---------- 100% STACKED BAR: ALL PROJECTS = 100% ----------
         st.subheader("📌 Project Distribution — All Projects = 100%")
         segments = list(zip(project_summary["Project"], project_summary["Hours"]))
-        colors = [get_color(p) for p, _ in segments]
+        colors = get_project_colors([p for p, _ in segments])
         fig = stacked_100_bar(segments, colors, figsize=(12, 2.0))
         st.pyplot(fig)
 
