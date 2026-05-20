@@ -668,3 +668,7 @@ if uploaded_file:
                 f"(excluding S9 - Work Order)"
             ),
         )
+
+# ---------- FOOTER ----------
+st.divider()
+st.caption("Dashboard produced by **Nar PJ** from **System Analyst Team by Socket 9**")
