@@ -671,4 +671,4 @@ if uploaded_file:
 
 # ---------- FOOTER ----------
 st.divider()
-st.caption("Dashboard produced by Nar PJ from the System Analyst Team at Socket 9")
+st.caption("Dashboard produced by Nar PJ")
